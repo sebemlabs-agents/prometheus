@@ -20,6 +20,7 @@ import painel  # noqa: E402
 import pasta as pasta_mod  # noqa: E402
 import seguro  # noqa: E402
 import atualizacao  # noqa: E402
+import pedidos  # noqa: E402
 import promocoes  # noqa: E402
 import planilha  # noqa: E402
 
@@ -1548,3 +1549,161 @@ def test_o_vinculo_da_shopee_com_a_tentativa_e_local_e_de_uso_unico():
     assert a.PEDIDO.name == ".oauth_state_shopee"
     assert a.VALIDADE_PEDIDO > 0
     assert hasattr(a, "_consumir")
+
+
+# ------------------------------------------------------------- prometheus-pedidos
+
+class _PedidosFalsos:
+    """Responde /orders/search por pagina. Registra o que foi pedido."""
+
+    def __init__(self, paginas, erro_na_pagina=None):
+        self.paginas = paginas
+        self.erro_na_pagina = erro_na_pagina
+        self.chamadas = []
+
+    def __call__(self, metodo, path, params=None):
+        self.chamadas.append((metodo, path, dict(params or {})))
+        assert metodo == "GET", "o leitor nao pode fazer nada alem de GET"
+        assert path == "/orders/search", "endpoint inesperado: %s" % path
+        n = int((params or {}).get("offset", 0)) // 50
+        if self.erro_na_pagina is not None and n == self.erro_na_pagina:
+            raise pedidos.meli.ErroDaAPI(502, "o servidor caiu")
+        pagina = self.paginas[n] if n < len(self.paginas) else []
+        return {"results": pagina, "paging": {"total": sum(len(p) for p in self.paginas)}}
+
+
+def _pedido(pid, valor=100.0, pago=None, situacao="paid", linhas=None, moeda="BRL", **extra):
+    d = {
+        "id": pid,
+        "date_created": "2026-10-18T10:00:00.000-03:00",
+        "status": situacao,
+        "total_amount": valor,
+        "paid_amount": valor if pago is None else pago,
+        "currency_id": moeda,
+        "buyer": {"id": 999, "nickname": "COMPRADOR", "first_name": "Fulano"},
+        "order_items": [dict({"item": {"id": "MLB1", "title": "Serra"},
+                              "quantity": 1, "unit_price": valor,
+                              "sale_fee": None if valor is None
+                              else round(valor * 0.14, 2)}, **(l or {}))
+                        for l in (linhas if linhas is not None else [{}])],
+    }
+    d.update(extra)
+    return d
+
+
+@pytest.fixture
+def pedidos_api(monkeypatch):
+    def instalar(paginas, erro_na_pagina=None):
+        falsa = _PedidosFalsos(paginas, erro_na_pagina)
+        monkeypatch.setattr(pedidos.meli, "request", falsa)
+        monkeypatch.setattr(pedidos.meli, "conta_conectada",
+                            lambda: {"id": 7, "apelido": "LOJA", "site": "MLB"})
+        return falsa
+    return instalar
+
+
+def test_pedidos_soma_so_o_que_esta_pago(pedidos_api):
+    pedidos_api([[_pedido("a", 100.0), _pedido("b", 50.0, situacao="cancelled")]])
+    d = pedidos.coletar(hoje=HOJE)
+    assert d["resumo"]["faturamento"] == 100.0
+    assert d["resumo"]["pedidos_pagos"] == 1
+
+
+def test_pedidos_cancelado_nao_some_calado(pedidos_api):
+    pedidos_api([[_pedido("a", 100.0), _pedido("b", 50.0, situacao="cancelled")]])
+    d = pedidos.coletar(hoje=HOJE)
+    assert any("cancel" in a.lower() for a in d["avisos"])
+
+
+def test_pedidos_deduplica_por_id(pedidos_api):
+    pedidos_api([[_pedido("a", 100.0)] * 50, [_pedido("a", 100.0)]])
+    d = pedidos.coletar(hoje=HOJE)
+    assert d["resumo"]["pedidos_pagos"] == 1
+    assert d["resumo"]["faturamento"] == 100.0
+
+
+def test_pedidos_pago_sem_valor_nao_soma_e_marca_parcial(pedidos_api):
+    pedidos_api([[_pedido("a", 100.0), _pedido("b", None)]])
+    d = pedidos.coletar(hoje=HOJE)
+    assert d["resumo"]["faturamento"] == 100.0
+    assert d["resumo"]["completo"] is False
+    assert any("sem valor" in a.lower() for a in d["avisos"])
+
+
+def test_pedidos_linha_sem_tarifa_vira_null_no_item(pedidos_api):
+    pedidos_api([[_pedido("a", 100.0, linhas=[{"sale_fee": None}])]])
+    d = pedidos.coletar(hoje=HOJE)
+    assert d["itens"][0]["linhas"][0]["tarifa"] is None
+
+
+def test_pedidos_comissao_total_e_null_enquanto_a_unidade_nao_foi_confirmada(pedidos_api):
+    pedidos_api([[_pedido("a", 100.0)]])
+    d = pedidos.coletar(hoje=HOJE)
+    assert d["resumo"]["comissao_total"] is None
+    assert "comissao_total" in d["faltando"]
+    assert "comissao_total" in d["lacunas"]
+
+
+def test_pedidos_duas_moedas_nao_somam(pedidos_api):
+    pedidos_api([[_pedido("a", 100.0), _pedido("b", 50.0, moeda="USD")]])
+    d = pedidos.coletar(hoje=HOJE)
+    assert d["resumo"]["faturamento"] is None
+    assert "faturamento" in d["faltando"]
+    assert "moeda" in d["lacunas"]["faturamento"].lower()
+
+
+def test_pedidos_sem_itens_vira_aviso(pedidos_api):
+    pedidos_api([[_pedido("a", 100.0, linhas=[])]])
+    d = pedidos.coletar(hoje=HOJE)
+    assert any("sem item" in a.lower() for a in d["avisos"])
+
+
+def test_pedidos_vazio_nao_e_falha_e_zero_e_zero_mesmo(pedidos_api):
+    pedidos_api([[]])
+    d = pedidos.coletar(hoje=HOJE)
+    assert d["resumo"]["pedidos_pagos"] == 0
+    assert d["resumo"]["faturamento"] == 0.0
+    assert d["resumo"]["completo"] is True
+
+
+def test_pedidos_falha_na_primeira_pagina_nao_devolve_zero_vendas(pedidos_api):
+    pedidos_api([[_pedido("a")]], erro_na_pagina=0)
+    with pytest.raises(pedidos.meli.ErroDaAPI):
+        pedidos.coletar(hoje=HOJE)
+
+
+def test_pedidos_falha_no_meio_vira_coleta_parcial(pedidos_api):
+    pedidos_api([[_pedido(str(i)) for i in range(50)], [_pedido("x")]], erro_na_pagina=1)
+    d = pedidos.coletar(hoje=HOJE)
+    assert d["resumo"]["completo"] is False
+    assert any("parcial" in a.lower() for a in d["avisos"])
+
+
+def test_pedidos_nao_guarda_dado_do_comprador(pedidos_api):
+    pedidos_api([[_pedido("a", 100.0)]])
+    bruto = json.dumps(pedidos.coletar(hoje=HOJE), ensure_ascii=False)
+    assert "COMPRADOR" not in bruto
+    assert "Fulano" not in bruto
+
+
+def test_pedidos_so_pede_pela_conta_autenticada(pedidos_api):
+    falsa = pedidos_api([[_pedido("a")]])
+    pedidos.coletar(hoje=HOJE)
+    assert all(c[2]["seller"] == 7 for c in falsa.chamadas)
+
+
+def test_pedidos_fixa_a_janela_antes_da_primeira_chamada(pedidos_api):
+    falsa = pedidos_api([[_pedido(str(i)) for i in range(50)], [_pedido("x")]])
+    pedidos.coletar(hoje=HOJE)
+    janelas = {(c[2]["order.date_created.from"], c[2]["order.date_created.to"])
+               for c in falsa.chamadas}
+    assert len(janelas) == 1
+
+
+def test_pedidos_teto_de_paginas_avisa_sem_dizer_quantos_ficaram(pedidos_api):
+    cheias = [[_pedido("p%d-%d" % (n, i)) for i in range(50)] for n in range(30)]
+    pedidos_api(cheias)
+    d = pedidos.coletar(hoje=HOJE)
+    assert d["resumo"]["completo"] is False
+    texto = " ".join(d["avisos"]).lower()
+    assert "incompleta" in texto
