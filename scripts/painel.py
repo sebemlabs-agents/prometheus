@@ -24,14 +24,16 @@ import contrato
 BASE = Path(__file__).resolve().parent
 
 TITULOS = {
+    "prometheus-pedidos": "Vendas e faturamento",
     "prometheus-promocoes": "Promoções terminando",
-    "prometheus-caixa": "Dinheiro a receber",
-    "prometheus-margem": "Margem por anúncio",
-    "prometheus-criativos": "Conteúdo de produto",
-    "prometheus-devolucoes": "Devoluções",
-    "prometheus-margem": "Margem por anúncio",
+    "prometheus-devolucoes": "Reclamações e devoluções",
+    "prometheus-anuncios": "Anúncios e estoque",
+    "prometheus-visitas": "Conversão",
+    "prometheus-recebiveis": "Dinheiro a receber",
+    "prometheus-saude": "Saúde da conta",
+    "prometheus-ads": "Anúncios pagos",
+    "prometheus-avaliacoes": "Avaliações",
     "prometheus-concorrencia": "Concorrência",
-    "prometheus-estoque": "Estoque e compras",
 }
 
 

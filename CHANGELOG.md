@@ -23,6 +23,34 @@
 > 4. anotar a mudança aqui embaixo
 > 5. publicar pelo Cypher Guard
 
+## 1.2.0 — 31 de outubro de 2026
+
+**Saem quatro skills.** O pacote passa a entregar só o que foi provado contra servidor real.
+A decisão é anterior ao código: **a skill abre a torneira, o Claude cruza, o painel mostra.**
+Uma skill que calcula margem, julga promoção ou escreve texto está opinando dentro do Python,
+onde ninguém confere — e o contrato de dados já dizia isso desde o começo: *a skill coleta e
+grava, o painel lê e formata.*
+
+- **`prometheus-criativos` sai.** Não lia dado nenhum: era um prompt embrulhado em Python. O
+  Claude faz isso melhor com o produto real na mão, sem skill no meio.
+- **`prometheus-margem` sai.** Era o cruzamento de dois arquivos que já existem — preço do
+  anúncio e custo da planilha ou da Olist. Cruzar é trabalho do Claude. **O custo continua
+  sendo importado normalmente** pela conexão da Olist e pela planilha; só a conta saiu de
+  dentro do pacote.
+- **`prometheus-caixa` sai, e volta.** O calendário de liberação é informação séria demais
+  para ir sem validação contra a API de verdade. Volta como `prometheus-recebiveis`, leitor
+  puro, depois de conferido numa conta real.
+- **`prometheus-spec` sai.** Escrevia um plano para subir o painel que ninguém executava.
+
+**Fica:** as três conexões (Mercado Livre, Shopee e Olist), a leitura de planilha e o painel.
+São as que atravessaram em máquina limpa contra servidor real.
+
+**Vem a seguir**, cada uma validada com chamada de verdade antes de entrar: pedidos (com a
+comissão real item por item), promoções, devoluções, anúncios e visitas — a conversão que o
+vendedor não vê no painel do Mercado Livre.
+
+Nada do que você já conectou muda: credencial, pasta e tokens continuam onde estavam.
+
 ## 1.1.1 — 22 de outubro de 2026
 
 Saiu de um ensaio da conexão Shopee feito na véspera da gravação, com conta e

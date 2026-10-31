@@ -45,8 +45,8 @@ por canal, nem subpasta.
 
 O motivo é o painel: ele monta **uma** tela com um bloco por skill, lendo os arquivos daquela
 pasta. Pastas separadas viram painéis separados, e aí some a coisa que o pacote entrega — a
-visão única de todos os canais. A margem também cruza custo de planilha com venda de canal;
-separado, o cruzamento quebra.
+visão única de todos os canais. O cruzamento de custo com venda também depende disso:
+separado, ele quebra.
 
 O `credenciais.txt` guarda os dois conjuntos de chave, em blocos diferentes. **Se o arquivo
 dela for de antes da Shopee existir, o pacote acrescenta as linhas novas sozinho** ao preparar

@@ -26,9 +26,8 @@ Um arquivo por skill, na pasta do próprio vendedor:
 
 ```
 <pasta-do-vendedor>/
+├── prometheus-pedidos.json
 ├── prometheus-promocoes.json
-├── prometheus-caixa.json
-├── prometheus-criativos.json
 ├── prometheus-devolucoes.json
 └── painel.html            ← gerado a partir dos .json presentes
 ```
@@ -203,12 +202,13 @@ Linhas de exemplo já previstas:
 | Skill | Um item é |
 |---|---|
 | `prometheus-promocoes` | uma promoção na janela: nome, término, dias restantes, anúncios dentro, percentual mínimo |
-| `prometheus-caixa` | uma data de liberação: valor líquido, origem, situação |
-| `prometheus-criativos` | um produto: título, descrição, benefícios, objeções |
+| `prometheus-pedidos` | um pedido: data, valor pago, situação, e a comissão real de cada item |
+| `prometheus-visitas` | um anúncio: visitas na janela, vendas na janela, conversão |
 | `prometheus-devolucoes` | uma devolução: status, motivo, se retornou, valor, situação do repasse |
-| `prometheus-margem` | um anúncio: preço, taxa, custo, imposto, margem de contribuição |
+| `prometheus-recebiveis` | uma data de liberação: valor líquido, origem, situação |
 | `prometheus-concorrencia` | um produto analisado: concorrentes da primeira página, preço, reputação, Full, posição do meu |
-| `prometheus-estoque` | um SKU: cobertura em dias, curva, sugestão de compra, `fonte_de_estoque` |
+| `prometheus-anuncios` | um anúncio: preço, estoque, saúde, quantidade vendida |
+| `prometheus-saude` | um sinal: o que mudou, desde quando, e o que isso ameaça |
 | `prometheus-conectar-meli` | não grava itens; grava o recibo de conexão em `resumo` |
 
 ---

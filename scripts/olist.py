@@ -11,8 +11,8 @@ e um programa de mesa, nao um cron. Ele so roda quando a pessoa abre. Se ela
 passar um tempo sem abrir, a conexao vence — e custo de produto nao muda todo
 dia.
 
-Entao a gente puxa o custo, grava na pasta, e o painel usa o arquivo. A margem
-continua funcionando dias depois, com a conexao ja vencida. Isso tambem poupa
+Entao a gente puxa o custo, grava na pasta, e o painel usa o arquivo. O cruzamento
+de margem continua funcionando dias depois, com a conexao ja vencida. Isso tambem poupa
 o limite de chamadas, que e da CONTA e nao do aplicativo: varrer catalogo aqui
 atrapalharia as outras integracoes dela.
 
@@ -271,7 +271,7 @@ def gravar_custos(itens):
 
 
 def custos_guardados():
-    """O que a margem usa. Devolve None quando nunca foi importado."""
+    """O custo por SKU, para cruzar com a venda. None quando nunca foi importado."""
     if not CUSTOS_FILE.exists():
         return None
     return json.loads(CUSTOS_FILE.read_text(encoding="utf-8"))

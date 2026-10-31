@@ -70,7 +70,7 @@ Quando o cruzamento virar algo que ele vai olhar de novo, grave no contrato do p
 aparecer como bloco:
 
 ```python
-contrato.gravar("prometheus-margem", conta=None, periodo=None,
+contrato.gravar("prometheus-planilha", conta=None, periodo=None,
                 resumo={...}, itens=[...],
                 fonte="export",
                 capturado_em=dado["capturado_em"],
