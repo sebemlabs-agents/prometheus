@@ -16,16 +16,12 @@ sys.path.insert(0, str(RAIZ / "scripts"))
 
 import contrato  # noqa: E402
 import meli  # noqa: E402
-import criativos  # noqa: E402
 import painel  # noqa: E402
 import pasta as pasta_mod  # noqa: E402
 import seguro  # noqa: E402
 import atualizacao  # noqa: E402
 import promocoes  # noqa: E402
-import caixa  # noqa: E402
-import spec  # noqa: E402
 import planilha  # noqa: E402
-import margem  # noqa: E402
 
 
 CONTA = {"id": 123456789, "apelido": "LOJA EXEMPLO", "site": "MLB"}
@@ -239,7 +235,7 @@ def test_gitignore_cobre_os_arquivos_sensiveis(tmp_path):
 
 def test_periodo_sem_pedidos_marca_faltando_em_vez_de_zero(tmp_path):
     dado = contrato.gravar(
-        "prometheus-caixa", CONTA, PERIODO, resumo={}, itens=[],
+        "prometheus-promocoes", CONTA, PERIODO, resumo={}, itens=[],
         faltando=["pedidos"],
         lacunas={"pedidos": "nao houve pedido pago neste periodo"},
         pasta=tmp_path,
@@ -252,7 +248,7 @@ def test_periodo_sem_pedidos_marca_faltando_em_vez_de_zero(tmp_path):
 def test_lacuna_sem_explicacao_e_recusada(tmp_path):
     with pytest.raises(contrato.ContratoInvalido, match="sem explicacao"):
         contrato.gravar(
-            "prometheus-margem", CONTA, PERIODO, resumo={}, itens=[],
+            "prometheus-promocoes", CONTA, PERIODO, resumo={}, itens=[],
             faltando=["custo"], pasta=tmp_path,
         )
 
@@ -260,7 +256,7 @@ def test_lacuna_sem_explicacao_e_recusada(tmp_path):
 def test_dinheiro_como_texto_e_recusado(tmp_path):
     with pytest.raises(contrato.ContratoInvalido, match="dinheiro"):
         contrato.gravar(
-            "prometheus-margem", CONTA, PERIODO, resumo={},
+            "prometheus-promocoes", CONTA, PERIODO, resumo={},
             itens=[{"mlb": "MLB1", "preco": "1.234,56"}], pasta=tmp_path,
         )
 
@@ -302,23 +298,23 @@ def test_gravar_e_carregar_fecham_o_ciclo(tmp_path):
 
 
 def test_gerado_em_tem_fuso(tmp_path):
-    dado = contrato.gravar("prometheus-caixa", CONTA, PERIODO, {}, [], pasta=tmp_path)
+    dado = contrato.gravar("prometheus-promocoes", CONTA, PERIODO, {}, [], pasta=tmp_path)
     assert dado["gerado_em"][-5] in "+-"
 
 
 def test_carregar_todos_ignora_versao_desconhecida(tmp_path):
-    contrato.gravar("prometheus-caixa", CONTA, PERIODO, {}, [], pasta=tmp_path)
+    contrato.gravar("prometheus-promocoes", CONTA, PERIODO, {}, [], pasta=tmp_path)
     (tmp_path / "prometheus-doutro-mundo.json").write_text(
         json.dumps({"contrato": "99", "skill": "prometheus-doutro-mundo"}), encoding="utf-8"
     )
     achados = contrato.carregar_todos(tmp_path)
-    assert [d["skill"] for d in achados] == ["prometheus-caixa"]
+    assert [d["skill"] for d in achados] == ["prometheus-promocoes"]
 
 
 def test_skill_local_nao_precisa_de_conta(tmp_path):
     """Skill que nao le a conta (conteudo de produto) nao tem conta pra nomear."""
     dado = contrato.gravar(
-        "prometheus-criativos", None, None, resumo={"produtos": 1},
+        "prometheus-planilha", None, None, resumo={"produtos": 1},
         itens=[{"titulo": "Serra circular"}], fonte="local", pasta=tmp_path,
     )
     assert dado["fonte"] == "local"
@@ -333,44 +329,11 @@ def test_fonte_api_continua_exigindo_conta(tmp_path):
         )
 
 
-# ----------------------------------------------------------------- criativos
-
-def test_criativos_recusa_produto_sem_nome():
-    with pytest.raises(ValueError, match="produto"):
-        criativos.preparar([{"titulo": "Serra circular"}])
-
-
-def test_criativos_recusa_lista_vazia():
-    with pytest.raises(ValueError, match="vazia"):
-        criativos.preparar([])
-
-
-def test_criativos_nao_inventa_campo_ausente():
-    itens, avisos = criativos.preparar([{"produto": "Serra circular"}])
-    assert itens[0]["titulo"] is None
-    assert itens[0]["beneficios"] == []
-    assert any("sem titulo" in a or "sem título" in a for a in avisos)
-
-
-def test_criativos_preserva_o_que_foi_escrito():
-    itens, _ = criativos.preparar([{
-        "produto": "Assador 70kg",
-        "titulo": "Assador Giratório Industrial 70kg Inox 127/220v",
-        "beneficios": ["Assa 12 frangos de uma vez"],
-        "objecoes": [{"duvida": "Cabe na cozinha?", "resposta": "Ocupa 90x60cm"}],
-        "specs": {"capacidade": "70 kg"},
-    }])
-    i = itens[0]
-    assert i["titulo"].startswith("Assador Giratório")
-    assert i["objecoes"][0]["duvida"] == "Cabe na cozinha?"
-    assert i["specs"]["capacidade"] == "70 kg"
-
-
 # -------------------------------------------------------------------- painel
 
 def test_painel_mostra_lacuna_quando_campo_esta_em_faltando(tmp_path):
     dado = contrato.montar(
-        "prometheus-margem", CONTA, PERIODO, resumo={}, itens=[],
+        "prometheus-promocoes", CONTA, PERIODO, resumo={}, itens=[],
         faltando=["custo"],
         lacunas={"custo": "o custo deste SKU nao veio na sua planilha"},
     )
@@ -406,7 +369,7 @@ def test_painel_vazio_explica_em_vez_de_quebrar():
 
 def test_painel_mostra_null_como_nao_veio_nao_como_zero():
     dado = contrato.montar(
-        "prometheus-margem", CONTA, PERIODO, {},
+        "prometheus-promocoes", CONTA, PERIODO, {},
         [{"mlb": "MLB1", "preco": 149.90, "custo": None, "margem": None}],
     )
     html = painel.render([dado])
@@ -426,7 +389,7 @@ def test_painel_escapa_conteudo_da_api():
 
 def test_idade_do_dado_aparece():
     antigo = time.strftime("%Y-%m-%dT%H:%M:%S%z", time.localtime(time.time() - 7200))
-    dado = contrato.montar("prometheus-caixa", CONTA, PERIODO, {}, [])
+    dado = contrato.montar("prometheus-promocoes", CONTA, PERIODO, {}, [])
     dado["gerado_em"] = antigo
     assert "há 2 h" in painel.render([dado])
 
@@ -745,230 +708,6 @@ def test_promocoes_passa_no_contrato(api, tmp_path):
     assert (tmp_path / "prometheus-promocoes.json").exists()
 
 
-# ------------------------------------------------------------------ prometheus-caixa
-
-def _pgto(pid="123456789", valor=100.0, libera_em=5, **extra):
-    base = dt.datetime(2026, 10, 19, 12, 0, tzinfo=caixa.FUSO)
-    d = {"id": pid, "status": "approved", "payment_type": "credit_card",
-         "transaction_amount": valor}
-    if libera_em is not None:
-        d["money_release_date"] = (base + dt.timedelta(days=libera_em)).isoformat()
-    d.update(extra)
-    return d
-
-
-def _pedido(*pagamentos):
-    return {"id": 1, "payments": list(pagamentos)}
-
-
-@pytest.fixture
-def pedidos(monkeypatch):
-    def instalar(lista):
-        chamadas = []
-
-        def falsa(metodo, path, params=None):
-            chamadas.append((metodo, path, params))
-            assert metodo == "GET"
-            assert path == "/orders/search"
-            if params.get("offset", 0) == 0:
-                return {"results": lista}
-            return {"results": []}
-
-        monkeypatch.setattr(caixa.meli, "request", falsa)
-        monkeypatch.setattr(caixa.meli, "conta_conectada",
-                            lambda: {"id": 1, "apelido": "LOJA", "site": "MLB"})
-        return chamadas
-    return instalar
-
-
-def test_caixa_agrupa_por_data_de_liberacao(pedidos):
-    pedidos([_pedido(_pgto(valor=100.0, libera_em=3)),
-             _pedido(_pgto(pid="987654321", valor=50.0, libera_em=3))])
-    d = caixa.coletar(hoje=HOJE)
-    assert len(d["itens"]) == 1
-    assert d["itens"][0]["valor"] == 150.0
-    assert d["itens"][0]["dias_ate_liberar"] == 3
-
-
-def test_caixa_ordena_pela_data(pedidos):
-    pedidos([_pedido(_pgto(valor=10.0, libera_em=9)),
-             _pedido(_pgto(pid="222222222", valor=20.0, libera_em=2))])
-    d = caixa.coletar(hoje=HOJE)
-    assert [i["dias_ate_liberar"] for i in d["itens"]] == [2, 9]
-
-
-def test_caixa_id_alfanumerico_nao_entra_porque_e_fatura(pedidos):
-    pedidos([_pedido(_pgto(pid="000felmloo", valor=45686.0))])
-    d = caixa.coletar(hoje=HOJE)
-    assert d["resumo"]["a_receber"] == 0
-    assert any("fatura do Meli" in a for a in d["avisos"])
-
-
-def test_caixa_saque_fica_fora_do_calendario(pedidos):
-    pedidos([_pedido(_pgto(valor=900.0, payment_type="payout"))])
-    d = caixa.coletar(hoje=HOJE)
-    assert d["resumo"]["a_receber"] == 0
-    assert any("saque ou transfer" in a for a in d["avisos"])
-
-
-def test_caixa_pagamento_sem_data_vira_lacuna_e_nao_soma(pedidos):
-    pedidos([_pedido(_pgto(valor=300.0, libera_em=None))])
-    d = caixa.coletar(hoje=HOJE)
-    assert d["resumo"]["a_receber"] == 0
-    assert "data_de_liberacao" in d["faltando"]
-    assert "300.00" in d["lacunas"]["data_de_liberacao"]
-
-
-def test_caixa_aceita_nome_alternativo_do_campo_de_liberacao(pedidos):
-    base = dt.datetime(2026, 10, 19, 12, 0, tzinfo=caixa.FUSO)
-    p = _pgto(valor=77.0, libera_em=None)
-    p["date_released"] = (base + dt.timedelta(days=4)).isoformat()
-    pedidos([_pedido(p)])
-    d = caixa.coletar(hoje=HOJE)
-    assert d["itens"][0]["valor"] == 77.0
-
-
-def test_caixa_pagamento_nao_aprovado_e_ignorado(pedidos):
-    pedidos([_pedido(_pgto(valor=500.0, status="rejected"))])
-    assert caixa.coletar(hoje=HOJE)["resumo"]["a_receber"] == 0
-
-
-def test_caixa_separa_o_que_ja_liberou(pedidos):
-    pedidos([_pedido(_pgto(valor=80.0, libera_em=-3)),
-             _pedido(_pgto(pid="333333333", valor=20.0, libera_em=4))])
-    d = caixa.coletar(hoje=HOJE)
-    assert d["resumo"]["ja_liberado_na_janela"] == 80.0
-    assert d["resumo"]["a_receber"] == 20.0
-
-
-def test_caixa_conta_os_proximos_sete_dias(pedidos):
-    pedidos([_pedido(_pgto(valor=10.0, libera_em=2)),
-             _pedido(_pgto(pid="444444444", valor=90.0, libera_em=20))])
-    d = caixa.coletar(hoje=HOJE)
-    assert d["resumo"]["libera_em_7_dias"] == 10.0
-    assert d["resumo"]["a_receber"] == 100.0
-
-
-def test_caixa_sempre_diz_que_nao_e_saldo_da_carteira(pedidos):
-    pedidos([])
-    d = caixa.coletar(hoje=HOJE)
-    assert "saldo_da_carteira" in d["faltando"]
-    assert "o_que_vazou" in d["faltando"]
-
-
-def test_caixa_sem_pedidos_nao_e_erro(pedidos):
-    pedidos([])
-    d = caixa.coletar(hoje=HOJE)
-    assert d["itens"] == [] and d["resumo"]["a_receber"] == 0
-
-
-def test_caixa_valor_que_nao_e_numero_e_contado_e_relatado(pedidos):
-    pedidos([_pedido(_pgto(valor="nao sei"))])
-    d = caixa.coletar(hoje=HOJE)
-    assert d["resumo"]["a_receber"] == 0
-    assert any("sem valor" in a for a in d["avisos"])
-
-
-def test_caixa_passa_no_contrato(pedidos, tmp_path):
-    pedidos([_pedido(_pgto(valor=123.45, libera_em=6))])
-    d = caixa.coletar(hoje=HOJE)
-    g = contrato.gravar("prometheus-caixa", conta=d["conta"], periodo=d["periodo"],
-                        resumo=d["resumo"], itens=d["itens"], faltando=d["faltando"],
-                        lacunas=d["lacunas"], avisos=d["avisos"], pasta=tmp_path)
-    assert g["contrato"] == "1"
-
-
-# ------------------------------------------------------------------- prometheus-spec
-
-def _grava(pasta, skill, itens, **extra):
-    base = dict(conta={"id": 1, "apelido": "LOJA", "site": "MLB"},
-                periodo={"de": "2026-10-01", "ate": "2026-10-19"},
-                resumo={"total": 1}, itens=itens, pasta=pasta)
-    base.update(extra)
-    return contrato.gravar(skill, **base)
-
-
-def test_spec_infere_o_tipo_pelo_dado_real(tmp_path):
-    _grava(tmp_path, "prometheus-promocoes", [
-        {"promocao": "X", "termina": "2026-10-24", "dias": 5,
-         "desconto": 15.5, "amplo": True, "extra": {"a": 1}}])
-    plano = spec.montar(tmp_path)
-    tipos = {c["origem"]: c["tipo"] for c in plano["blocos"][0]["colunas"]}
-    assert tipos["promocao"] == "text"
-    assert tipos["termina"] == "date"
-    assert tipos["dias"] == "integer"
-    assert tipos["desconto"] == "numeric(14,2)"
-    assert tipos["amplo"] == "boolean"
-    assert tipos["extra"] == "jsonb"
-
-
-def test_spec_coluna_sempre_vazia_e_marcada(tmp_path):
-    _grava(tmp_path, "prometheus-caixa", [{"valor": None}])
-    plano = spec.montar(tmp_path)
-    assert plano["blocos"][0]["colunas"][0]["sempre_vazia"] is True
-
-
-def test_spec_um_numero_entre_nulos_ainda_define_o_tipo(tmp_path):
-    _grava(tmp_path, "prometheus-caixa", [{"valor": None}, {"valor": 10.0}])
-    plano = spec.montar(tmp_path)
-    assert plano["blocos"][0]["colunas"][0]["tipo"] == "numeric(14,2)"
-
-
-def test_spec_une_colunas_de_itens_diferentes(tmp_path):
-    _grava(tmp_path, "prometheus-caixa", [{"a": 1}, {"b": "x"}])
-    plano = spec.montar(tmp_path)
-    assert [c["origem"] for c in plano["blocos"][0]["colunas"]] == ["a", "b"]
-
-
-def test_spec_nome_de_tabela_vira_identificador_valido(tmp_path):
-    _grava(tmp_path, "prometheus-promocoes", [{"a": 1}])
-    plano = spec.montar(tmp_path)
-    assert plano["blocos"][0]["tabela"] == "prometheus_promocoes"
-
-
-def test_spec_recusa_pasta_sem_dado(tmp_path):
-    with pytest.raises(FileNotFoundError):
-        spec.montar(tmp_path)
-
-
-def test_spec_sempre_liga_rls_e_nao_cria_politica(tmp_path):
-    _grava(tmp_path, "prometheus-caixa", [{"valor": 1.0}])
-    texto = spec.escrever(spec.montar(tmp_path), tmp_path).read_text(encoding="utf-8")
-    assert "enable row level security" in texto
-    assert "create policy" not in texto
-    assert "ninguém lê nada" in texto
-
-
-def test_spec_escreve_a_fronteira_dos_segredos(tmp_path):
-    _grava(tmp_path, "prometheus-caixa", [{"valor": 1.0}])
-    texto = spec.escrever(spec.montar(tmp_path), tmp_path).read_text(encoding="utf-8")
-    assert "Os dados sobem. A credencial não." in texto
-    for arquivo in ("tokens.json", "credenciais.txt", ".env"):
-        assert arquivo in texto
-
-
-def test_spec_nao_vaza_valor_de_segredo(tmp_path):
-    (tmp_path / "credenciais.txt").write_text("MELI_APP_ID=999\nMELI_CLIENT_SECRET=abc\n",
-                                              encoding="utf-8")
-    _grava(tmp_path, "prometheus-caixa", [{"valor": 1.0}])
-    texto = spec.escrever(spec.montar(tmp_path), tmp_path).read_text(encoding="utf-8")
-    assert "999" not in texto and "abc" not in texto
-
-
-def test_spec_avisa_quando_a_skill_esta_em_demonstracao(tmp_path):
-    _grava(tmp_path, "prometheus-caixa", [{"valor": 1.0}], fonte="demo")
-    texto = spec.escrever(spec.montar(tmp_path), tmp_path).read_text(encoding="utf-8")
-    assert "demonstração" in texto
-    assert "nasce mentindo" in texto
-
-
-def test_spec_aponta_superpowers_sem_exigir(tmp_path):
-    _grava(tmp_path, "prometheus-caixa", [{"valor": 1.0}])
-    texto = spec.escrever(spec.montar(tmp_path), tmp_path).read_text(encoding="utf-8")
-    assert "superpowers" in texto
-    assert "Não é necessário" in texto
-
-
 # ------------------------------------------------- planilha: CSV e XLSX crus
 
 def _csv(tmp_path, linhas, codec="utf-8"):
@@ -1159,7 +898,7 @@ def test_xlsx_que_nao_e_zip_explica(tmp_path):
 # ------------------------------------------------ contrato: origem 'export'
 
 def test_contrato_aceita_fonte_export(tmp_path):
-    d = contrato.gravar("prometheus-margem", conta=None, periodo=None, resumo={"n": 1},
+    d = contrato.gravar("prometheus-promocoes", conta=None, periodo=None, resumo={"n": 1},
                         itens=[{"sku": "A"}], fonte="export",
                         capturado_em="2026-10-12T09:00:00-03:00", pasta=tmp_path)
     assert d["fonte"] == "export"
@@ -1173,131 +912,12 @@ def test_contrato_capturado_em_e_opcional(tmp_path):
 
 
 def test_painel_marca_dado_de_planilha_e_a_idade_do_arquivo(tmp_path):
-    contrato.gravar("prometheus-margem", conta=None, periodo=None, resumo={"n": 1},
+    contrato.gravar("prometheus-promocoes", conta=None, periodo=None, resumo={"n": 1},
                     itens=[{"sku": "A"}], fonte="export",
                     capturado_em="2026-10-12T09:00:00-03:00", pasta=tmp_path)
     html = painel.render(contrato.carregar_todos(tmp_path))
     assert "de planilha" in html
     assert "arquivo de" in html
-
-
-# ----------------------------------------------------------------- prometheus-margem
-
-def _linha(**kw):
-    base = {"sku": "A1", "preco": 100.0, "custo": 40.0, "taxa": 12.0,
-            "frete": 15.0, "imposto": 8.0}
-    base.update(kw)
-    return base
-
-
-def test_margem_calcula_o_que_sobra():
-    itens, *_ = margem.calcular([_linha()])
-    assert itens[0]["margem"] == 25.0
-    assert itens[0]["margem_pct"] == 25.0
-
-
-def test_margem_negativa_e_calculada_e_avisada():
-    itens, _, _, avisos, resumo = margem.calcular([_linha(custo=90.0)])
-    assert itens[0]["margem"] == -25.0
-    assert resumo["anuncios_no_prejuizo"] == 1
-    assert any("NEGATIVA" in a for a in avisos)
-
-
-def test_margem_custo_ausente_nao_vira_zero():
-    itens, faltando, lacunas, _, resumo = margem.calcular([_linha(custo=None)])
-    assert itens[0]["margem"] is None
-    assert itens[0]["sem_margem_porque"] == ["custo"]
-    assert "custo" in faltando and "custo" in lacunas
-    assert resumo["com_margem_calculada"] == 0
-
-
-def test_margem_custo_vazio_como_texto_tambem_nao_vira_zero():
-    itens, *_ = margem.calcular([_linha(custo="")])
-    assert itens[0]["margem"] is None
-
-
-def test_margem_zero_declarado_e_diferente_de_ausente():
-    itens, *_ = margem.calcular([_linha(frete=0)])
-    assert itens[0]["margem"] == 40.0
-    assert itens[0]["sem_margem_porque"] == []
-
-
-def test_margem_aceita_percentual_no_lugar_do_valor():
-    linha = _linha(taxa=None, imposto=None)
-    linha["taxa_pct"] = 12.0
-    linha["imposto_pct"] = 8.0
-    itens, *_ = margem.calcular([linha])
-    assert itens[0]["taxa"] == 12.0
-    assert itens[0]["margem"] == 25.0
-    assert itens[0]["calculado_por_percentual"] == ["imposto", "taxa"]
-
-
-def test_margem_valor_direto_ganha_do_percentual():
-    linha = _linha(taxa=20.0)
-    linha["taxa_pct"] = 50.0
-    itens, *_ = margem.calcular([linha])
-    assert itens[0]["taxa"] == 20.0
-
-
-def test_margem_lista_todos_os_componentes_que_faltaram():
-    itens, *_ = margem.calcular([_linha(custo=None, frete=None)])
-    assert itens[0]["sem_margem_porque"] == ["custo", "frete"]
-
-
-def test_margem_lacuna_diz_em_quantos_anuncios_faltou():
-    _, _, lacunas, _, _ = margem.calcular([_linha(custo=None), _linha(), _linha(custo=None)])
-    assert "2 de 3" in lacunas["custo"]
-
-
-def test_margem_lacuna_do_frete_ensina_a_escrever_zero():
-    _, _, lacunas, _, _ = margem.calcular([_linha(frete=None)])
-    assert "escreva 0" in lacunas["frete"]
-
-
-def test_margem_sem_identificacao_usa_a_posicao_e_avisa():
-    itens, _, _, avisos, _ = margem.calcular([{"preco": 10.0, "custo": 1.0,
-                                               "taxa": 1.0, "frete": 1.0, "imposto": 1.0}])
-    assert itens[0]["anuncio"] == "linha 1"
-    assert any("sem mlb" in a for a in avisos)
-
-
-def test_margem_prefere_mlb_depois_sku_depois_produto():
-    itens, *_ = margem.calcular([_linha(mlb="MLB1", produto="Chapa")])
-    assert itens[0]["anuncio"] == "MLB1"
-
-
-def test_margem_media_e_ponderada_pelo_preco():
-    itens, _, _, _, resumo = margem.calcular([
-        _linha(preco=100.0, custo=40.0, taxa=10.0, frete=0, imposto=0),
-        _linha(preco=900.0, custo=400.0, taxa=90.0, frete=0, imposto=0)])
-    # 50 + 410 sobre 1000 = 46%
-    assert resumo["margem_total"] == 460.0
-    assert resumo["margem_media_pct"] == 46.0
-
-
-def test_margem_mistura_calculada_e_nao_calculada():
-    _, _, _, avisos, resumo = margem.calcular([_linha(), _linha(custo=None)])
-    assert resumo["anuncios"] == 2 and resumo["com_margem_calculada"] == 1
-    assert any("1 de 2" in a for a in avisos)
-
-
-def test_margem_recusa_entrada_que_nao_e_lista():
-    with pytest.raises(ValueError):
-        margem.calcular({"sku": "A"})
-
-
-def test_margem_recusa_lista_vazia():
-    with pytest.raises(ValueError):
-        margem.calcular([])
-
-
-def test_margem_passa_no_contrato_como_export(tmp_path):
-    itens, faltando, lacunas, avisos, resumo = margem.calcular([_linha()])
-    d = contrato.gravar("prometheus-margem", conta=None, periodo=None, resumo=resumo,
-                        itens=itens, faltando=faltando, lacunas=lacunas,
-                        avisos=avisos, fonte="export",
-                        capturado_em="2026-10-12T09:00:00-03:00", pasta=tmp_path)
-    assert d["fonte"] == "export" and d["capturado_em"]
 
 
 # ------------------------------------------------------------------ shopee

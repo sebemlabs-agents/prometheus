@@ -103,12 +103,8 @@ deve?"*, *"atualiza o painel"*.
 | `prometheus-conectar-shopee` | o mesmo para a Shopee — precisa de um domínio HTTPS seu |
 | `prometheus-conectar-olist` | importa do ERP o **custo** dos produtos — o que o marketplace não tem |
 | `prometheus-painel` | o painel local com os blocos das skills que você rodou |
-| `prometheus-criativos` | produto cru vira título, descrição, benefícios e objeções — **não precisa de conexão nenhuma** |
 | `prometheus-promocoes` | a fila do que termina nos próximos dias, com anúncios dentro e desconto mínimo |
-| `prometheus-caixa` | quanto as suas vendas ainda vão liberar, e em que dia cada valor cai |
-| `prometheus-spec` | o plano para levar o painel para Supabase e Vercel, com a segurança ligada |
 | `prometheus-planilha` | lê qualquer CSV ou XLSX seu e cruza com o painel — sem formato obrigatório |
-| `prometheus-margem` | quanto sobra por anúncio depois de comissão, frete, custo e imposto |
 
 Mais skills entram pelo mesmo caminho: cada uma grava um arquivo no formato do
 [CONTRATO.md](./CONTRATO.md) e aparece como um bloco no painel.
