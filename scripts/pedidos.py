@@ -50,34 +50,49 @@ def _iso(momento):
 
 
 def _numero(valor):
-    """Devolve float ou None. Texto e vazio viram None, nunca zero."""
-    if valor is None or valor == "":
+    """So aceita numero de verdade. Qualquer outra coisa vira None, nunca zero.
+
+    Recusa bool de proposito: `True` viraria R$ 1,00 sem ninguem perceber.
+    Recusa infinito e NaN: alem de errado, NaN nem e JSON valido.
+    Recusa texto numerico: o contrato manda dinheiro como numero, e aceitar
+    "100" aqui esconderia que a resposta veio fora do formato.
+    """
+    if isinstance(valor, bool) or not isinstance(valor, (int, float)):
         return None
-    try:
-        return float(valor)
-    except (TypeError, ValueError):
+    numero = float(valor)
+    if numero != numero or numero in (float("inf"), float("-inf")):
         return None
+    return numero
+
+
+def _inteiro(valor):
+    """Quantidade so vale se for inteira de verdade. 1.9 nao vira 1."""
+    if isinstance(valor, bool):
+        return None
+    if isinstance(valor, int):
+        return valor
+    if isinstance(valor, float) and valor == int(valor) and valor == valor:
+        return int(valor)
+    return None
 
 
 def _linhas(pedido):
     saida = []
     for linha in (pedido.get("order_items") or []):
         anuncio = linha.get("item") or {}
-        unidades = linha.get("quantity")
         saida.append({
             "mlb": anuncio.get("id") or linha.get("item_id"),
             "titulo": anuncio.get("title"),
-            "unidades": int(unidades) if unidades is not None else None,
+            "unidades": _inteiro(linha.get("quantity")),
             "preco_unitario": _numero(linha.get("unit_price")),
             "tarifa": _numero(linha.get("sale_fee")),
         })
     return saida
 
 
-def _buscar(conta, de, ate, teto):
+def _buscar(conta, de, ate, teto, sem_id):
     """Devolve (pedidos deduplicados, parcial, aviso). Erro na 1a pagina sobe."""
     vistos = {}
-    aviso = None
     for pagina in range(teto):
         try:
             corpo = meli.request("GET", "/orders/search", {
@@ -96,11 +111,24 @@ def _buscar(conta, de, ate, teto):
             return vistos, True, ("a coleta ficou parcial: a página %d não veio, "
                                   "e o que está abaixo é só o que chegou antes"
                                   % (pagina + 1))
-        achados = corpo.get("results") or []
+        achados = corpo.get("results") if isinstance(corpo, dict) else None
+        if not isinstance(achados, list):
+            # Resposta fora do formato NAO e "nenhuma venda". Lista vazia de
+            # verdade e; ausencia de lista e resposta que nao deu para ler.
+            if pagina == 0:
+                raise meli.ErroDaAPI(
+                    502, "a resposta do Mercado Livre veio fora do formato esperado")
+            return vistos, True, ("a coleta ficou parcial: a página %d veio fora do "
+                                  "formato e foi descartada" % (pagina + 1))
         for pedido in achados:
+            if not isinstance(pedido, dict):
+                sem_id[0] += 1
+                continue
             chave = pedido.get("id")
-            if chave is not None and chave not in vistos:
-                vistos[chave] = pedido
+            if chave is None:
+                sem_id[0] += 1
+                continue
+            vistos.setdefault(chave, pedido)
         if len(achados) < POR_PAGINA:
             return vistos, False, None
     return vistos, True, ("a coleta está incompleta: o teto de %d páginas foi atingido. "
@@ -119,7 +147,8 @@ def coletar(janela=JANELA_PADRAO, hoje=None, teto=MAX_PAGINAS):
     de = _iso(dt.datetime.combine(primeiro, dt.time.min, tzinfo=FUSO))
     ate = _iso(dt.datetime.combine(hoje, dt.time.max, tzinfo=FUSO))
 
-    vistos, parcial, aviso_coleta = _buscar(conta, de, ate, teto)
+    sem_id = [0]
+    vistos, parcial, aviso_coleta = _buscar(conta, de, ate, teto, sem_id)
 
     avisos = []
     if aviso_coleta:
@@ -132,39 +161,48 @@ def coletar(janela=JANELA_PADRAO, hoje=None, teto=MAX_PAGINAS):
     unidades = 0
     pagos = 0
     nao_pagos = 0
-    valor_nao_pago = 0.0
     sem_valor = 0
+    sem_pago = 0
     sem_itens = 0
+    sem_moeda = 0
     unidade_desconhecida = False
 
     for pedido in vistos.values():
         situacao = (pedido.get("status") or "").lower()
         valor = _numero(pedido.get("total_amount"))
         if situacao != "paid":
+            # Nao somamos o valor dos nao pagos: eles podem estar em outra moeda,
+            # e um total que mistura moeda nao quer dizer nada.
             nao_pagos += 1
-            valor_nao_pago += valor or 0.0
             continue
 
         pagos += 1
         moeda = pedido.get("currency_id")
-        if moeda:
+        if isinstance(moeda, str) and moeda:
             moedas.add(moeda)
+        else:
+            moeda = None
+            sem_moeda += 1
         if valor is None:
             sem_valor += 1
         else:
             faturamento += valor
         pago = _numero(pedido.get("paid_amount"))
-        if pago is not None:
+        if pago is None:
+            sem_pago += 1
+        else:
             pago_total += pago
 
         linhas = _linhas(pedido)
         if not linhas:
             sem_itens += 1
-        for linha in linhas:
-            if linha["unidades"] is None:
-                unidade_desconhecida = True
-            else:
-                unidades += linha["unidades"]
+        # Um pedido com quantidade faltando nao pode estragar a contagem do
+        # pedido seguinte: o indicador e POR PEDIDO, e so depois sobe para o resumo.
+        falta_aqui = (not linhas) or any(l["unidades"] is None for l in linhas)
+        if falta_aqui:
+            unidade_desconhecida = True
+        else:
+            unidades += sum(l["unidades"] for l in linhas)
 
         itens.append({
             "id": pedido.get("id"),
@@ -173,8 +211,7 @@ def coletar(janela=JANELA_PADRAO, hoje=None, teto=MAX_PAGINAS):
             "valor": valor,
             "pago": pago,
             "moeda": moeda,
-            "unidades": None if unidade_desconhecida else sum(
-                l["unidades"] or 0 for l in linhas),
+            "unidades": None if falta_aqui else sum(l["unidades"] for l in linhas),
             "linhas": linhas,
         })
 
@@ -187,18 +224,35 @@ def coletar(janela=JANELA_PADRAO, hoje=None, teto=MAX_PAGINAS):
     faltando.append("comissao_total")
     lacunas["comissao_total"] = LACUNA_TARIFA
 
-    varias_moedas = len(moedas) > 1
-    if varias_moedas:
+    # Somar so vale quando TODA a janela esta numa moeda conhecida. Moeda ausente
+    # conta como desconhecida: somar com os reais daria um numero que nao existe.
+    moeda_segura = len(moedas) <= 1 and not sem_moeda
+    if not moeda_segura:
         faturamento = None
         pago_total = None
         faltando.append("faturamento")
-        lacunas["faturamento"] = (
-            "a janela tem mais de uma moeda (%s), e somar moedas diferentes daria um "
-            "número que não existe" % ", ".join(sorted(moedas))
-        )
+        if sem_moeda:
+            lacunas["faturamento"] = (
+                "%d pedido(s) vieram sem dizer a moeda, e somar valor de moeda "
+                "desconhecida com real daria um número que não existe" % sem_moeda
+            )
+        else:
+            lacunas["faturamento"] = (
+                "a janela tem mais de uma moeda (%s), e somar moedas diferentes daria "
+                "um número que não existe" % ", ".join(sorted(moedas))
+            )
     else:
         faturamento = round(faturamento, 2)
         pago_total = round(pago_total, 2)
+
+    if pago_total is not None and sem_pago:
+        # Faltou o desembolso de alguem: a soma viraria subtotal com cara de total.
+        pago_total = None
+        faltando.append("pago_pelo_comprador")
+        lacunas["pago_pelo_comprador"] = (
+            "%d pedido(s) pago(s) não trouxeram quanto o comprador desembolsou, "
+            "então esta soma seria menor do que a realidade" % sem_pago
+        )
 
     if unidade_desconhecida:
         faltando.append("unidades")
@@ -211,12 +265,15 @@ def coletar(janela=JANELA_PADRAO, hoje=None, teto=MAX_PAGINAS):
         avisos.append("%d pedido(s) pago(s) vieram sem valor e ficaram de fora da soma: "
                       "o faturamento abaixo é um subtotal" % sem_valor)
     if nao_pagos:
-        avisos.append("%d pedido(s) não pagos (cancelado ou inválido) ficaram de fora, "
-                      "somando R$ %.2f" % (nao_pagos, valor_nao_pago))
+        avisos.append("%d pedido(s) não pagos (cancelado ou inválido) ficaram de fora "
+                      "da soma" % nao_pagos)
+    if sem_id[0]:
+        avisos.append("%d registro(s) vieram sem identificação e foram descartados: "
+                      "a contagem abaixo pode estar menor do que a real" % sem_id[0])
     if sem_itens:
         avisos.append("%d pedido(s) vieram sem item nenhum" % sem_itens)
 
-    completo = not parcial and not sem_valor
+    completo = not parcial and not sem_valor and not sem_id[0]
 
     ticket = None
     if faturamento is not None and pagos and completo:
@@ -235,7 +292,7 @@ def coletar(janela=JANELA_PADRAO, hoje=None, teto=MAX_PAGINAS):
     return {
         "conta": conta,
         "periodo": {"de": primeiro.isoformat(), "ate": hoje.isoformat()},
-        "moeda": (sorted(moedas)[0] if len(moedas) == 1 else "BRL"),
+        "moeda": (sorted(moedas)[0] if len(moedas) == 1 else None),
         "resumo": resumo,
         "itens": itens,
         "faltando": faltando,
@@ -268,12 +325,14 @@ def _main():
         print("Nenhum pedido pago na janela.")
         print("Gravado assim mesmo: janela vazia tambem e informacao.")
     else:
+        simbolo = d["moeda"] or "?"
         rotulo = "Faturamento" if r["completo"] else "Faturamento (subtotal)"
-        print("%-24s R$ %s" % (rotulo, "?" if r["faturamento"] is None
+        print("%-24s %s %s" % (rotulo, simbolo, "sem numero - veja a lacuna"
+                               if r["faturamento"] is None
                                else "%.2f" % r["faturamento"]))
         print("%-24s %d" % ("Pedidos pagos", r["pedidos_pagos"]))
         if r["ticket_medio"] is not None:
-            print("%-24s R$ %.2f" % ("Ticket medio", r["ticket_medio"]))
+            print("%-24s %s %.2f" % ("Ticket medio", simbolo, r["ticket_medio"]))
     for aviso in d["avisos"]:
         print("  aviso: %s" % aviso)
     print("\nVeja no painel:  python3 painel.py")
