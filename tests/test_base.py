@@ -1583,8 +1583,8 @@ def _pedido(pid, valor=100.0, pago=None, situacao="paid", linhas=None, moeda="BR
         "buyer": {"id": 999, "nickname": "COMPRADOR", "first_name": "Fulano"},
         "order_items": [dict({"item": {"id": "MLB1", "title": "Serra"},
                               "quantity": 1, "unit_price": valor,
-                              "sale_fee": None if valor is None
-                              else round(valor * 0.14, 2)}, **(l or {}))
+                              "sale_fee": round(valor * 0.14, 2)
+                              if isinstance(valor, float) else None}, **(l or {}))
                         for l in (linhas if linhas is not None else [{}])],
     }
     d.update(extra)
@@ -1707,3 +1707,79 @@ def test_pedidos_teto_de_paginas_avisa_sem_dizer_quantos_ficaram(pedidos_api):
     assert d["resumo"]["completo"] is False
     texto = " ".join(d["avisos"]).lower()
     assert "incompleta" in texto
+
+
+def test_pedidos_resposta_sem_results_na_primeira_pagina_nao_e_zero_vendas(monkeypatch):
+    monkeypatch.setattr(pedidos.meli, "request", lambda *a, **k: {"paging": {}})
+    monkeypatch.setattr(pedidos.meli, "conta_conectada",
+                        lambda: {"id": 7, "apelido": "LOJA", "site": "MLB"})
+    with pytest.raises(pedidos.meli.ErroDaAPI):
+        pedidos.coletar(hoje=HOJE)
+
+
+def test_pedidos_registro_sem_id_e_descartado_mas_dito(pedidos_api):
+    pedidos_api([[_pedido("a", 100.0), dict(_pedido("b", 50.0), id=None)]])
+    d = pedidos.coletar(hoje=HOJE)
+    assert d["resumo"]["completo"] is False
+    assert any("sem identificação" in a for a in d["avisos"])
+
+
+def test_pedidos_sem_moeda_nao_soma_com_real(pedidos_api):
+    pedidos_api([[_pedido("a", 100.0), dict(_pedido("b", 50.0), currency_id=None)]])
+    d = pedidos.coletar(hoje=HOJE)
+    assert d["resumo"]["faturamento"] is None
+    assert "sem dizer a moeda" in d["lacunas"]["faturamento"]
+
+
+def test_pedidos_janela_so_em_dolar_nao_vira_reais(pedidos_api):
+    pedidos_api([[_pedido("a", 100.0, moeda="USD")]])
+    d = pedidos.coletar(hoje=HOJE)
+    assert d["moeda"] == "USD"
+    assert d["resumo"]["faturamento"] == 100.0
+
+
+def test_pedidos_sem_pago_pelo_comprador_vira_null_e_nao_subtotal(pedidos_api):
+    pedidos_api([[_pedido("a", 100.0), dict(_pedido("b", 50.0), paid_amount=None)]])
+    d = pedidos.coletar(hoje=HOJE)
+    assert d["resumo"]["pago_pelo_comprador"] is None
+    assert "pago_pelo_comprador" in d["faltando"]
+
+
+def test_pedidos_quantidade_faltando_nao_contamina_o_pedido_seguinte(pedidos_api):
+    pedidos_api([[_pedido("a", 100.0, linhas=[{"quantity": None}]),
+                  _pedido("b", 100.0, linhas=[{"quantity": 3}])]])
+    d = pedidos.coletar(hoje=HOJE)
+    por_id = {i["id"]: i for i in d["itens"]}
+    assert por_id["a"]["unidades"] is None
+    assert por_id["b"]["unidades"] == 3
+    assert d["resumo"]["unidades"] is None
+
+
+def test_pedidos_booleano_nao_vira_dinheiro(pedidos_api):
+    pedidos_api([[_pedido("a", True)]])
+    d = pedidos.coletar(hoje=HOJE)
+    assert d["itens"][0]["valor"] is None
+    assert d["resumo"]["completo"] is False
+
+
+def test_pedidos_texto_numerico_nao_vira_dinheiro(pedidos_api):
+    pedidos_api([[_pedido("a", "100.00")]])
+    d = pedidos.coletar(hoje=HOJE)
+    assert d["itens"][0]["valor"] is None
+
+
+def test_pedidos_quantidade_quebrada_nao_e_truncada(pedidos_api):
+    pedidos_api([[_pedido("a", 100.0, linhas=[{"quantity": 1.9}])]])
+    d = pedidos.coletar(hoje=HOJE)
+    assert d["itens"][0]["linhas"][0]["unidades"] is None
+
+
+def test_pedidos_envelope_do_contrato_aceita_o_que_o_leitor_monta(pedidos_api):
+    pedidos_api([[_pedido("a", 100.0), dict(_pedido("b", 50.0), currency_id=None)]])
+    d = pedidos.coletar(hoje=HOJE)
+    envelope = contrato.montar("prometheus-pedidos", d["conta"], d["periodo"],
+                               d["resumo"], d["itens"], faltando=d["faltando"],
+                               lacunas=d["lacunas"], avisos=d["avisos"],
+                               moeda=d["moeda"])
+    assert envelope["skill"] == "prometheus-pedidos"
+    json.dumps(envelope, allow_nan=False)
