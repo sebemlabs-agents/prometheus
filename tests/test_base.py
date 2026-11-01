@@ -3,7 +3,9 @@
 Rodar:  python3 -m pytest tests -q        (na raiz do repositorio)
 """
 import datetime as dt
+import io
 import json
+import urllib.error
 import os
 import sys
 import time
@@ -1803,3 +1805,88 @@ def test_pedidos_envelope_do_contrato_aceita_o_que_o_leitor_monta(pedidos_api):
                                moeda=d["moeda"])
     assert envelope["skill"] == "prometheus-pedidos"
     json.dumps(envelope, allow_nan=False)
+
+
+# ------------------------------------------------ limite de chamadas: repetir
+
+class _RespostaFalsa:
+    def __init__(self, corpo):
+        self._corpo = corpo.encode("utf-8")
+
+    def read(self):
+        return self._corpo
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *a):
+        return False
+
+
+def _erro_http(codigo, retry_after=None):
+    import email.message
+    cabecalhos = email.message.Message()
+    if retry_after is not None:
+        cabecalhos["Retry-After"] = str(retry_after)
+    return urllib.error.HTTPError("https://api.mercadolibre.com/x", codigo,
+                                  "nao", cabecalhos, io.BytesIO(b"{}"))
+
+
+@pytest.fixture
+def api_instavel(monkeypatch):
+    def instalar(sequencia):
+        estado = {"n": 0, "esperas": []}
+
+        def abrir(req, timeout=None):
+            item = sequencia[estado["n"]]
+            estado["n"] += 1
+            if isinstance(item, int):
+                raise _erro_http(item)
+            return _RespostaFalsa(item)
+
+        monkeypatch.setattr(meli.seguro, "abrir", abrir)
+        monkeypatch.setattr(meli, "get_access_token", lambda: "token-de-teste")
+        monkeypatch.setattr(meli.time, "sleep", lambda s: estado["esperas"].append(s))
+        return estado
+    return instalar
+
+
+def test_limite_de_chamadas_e_repetido_em_vez_de_derrubar_a_skill(api_instavel):
+    estado = api_instavel([429, 429, '{"results": [1]}'])
+    assert meli.request("GET", "/orders/search") == {"results": [1]}
+    assert estado["esperas"] == [2.0, 5.0]
+
+
+def test_falha_passageira_do_servidor_tambem_e_repetida(api_instavel):
+    api_instavel([502, '{"ok": true}'])
+    assert meli.request("GET", "/orders/search") == {"ok": True}
+
+
+def test_nao_adianta_repetir_sem_autorizacao(api_instavel):
+    estado = api_instavel([401, '{"nunca": "chega"}'])
+    with pytest.raises(meli.ErroDaAPI):
+        meli.request("GET", "/orders/search")
+    assert estado["esperas"] == []
+
+
+def test_desiste_depois_das_tentativas_combinadas(api_instavel):
+    api_instavel([429, 429, 429, 429])
+    with pytest.raises(meli.ErroDaAPI):
+        meli.request("GET", "/orders/search")
+
+
+def test_respeita_a_espera_que_o_servidor_pediu(monkeypatch):
+    esperas = []
+    chamadas = {"n": 0}
+
+    def abrir(req, timeout=None):
+        chamadas["n"] += 1
+        if chamadas["n"] == 1:
+            raise _erro_http(429, retry_after=30)
+        return _RespostaFalsa('{"ok": true}')
+
+    monkeypatch.setattr(meli.seguro, "abrir", abrir)
+    monkeypatch.setattr(meli, "get_access_token", lambda: "t")
+    monkeypatch.setattr(meli.time, "sleep", lambda s: esperas.append(s))
+    assert meli.request("GET", "/x") == {"ok": True}
+    assert esperas == [30.0]

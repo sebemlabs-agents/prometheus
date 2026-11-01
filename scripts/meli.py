@@ -217,6 +217,12 @@ def get_access_token(forcar=False):
     return salvar_tokens(novo)["access_token"]
 
 
+# Repetir so faz sentido para limite de chamadas e falha passageira do servidor.
+# 401 e 403 nao melhoram com insistencia, e 404 muito menos.
+REPETIVEIS = (429, 500, 502, 503, 504)
+ESPERAS = (2.0, 5.0, 12.0)
+
+
 def request(metodo, path, params=None):
     """Porta unica de saida para a API. Recusa tudo que nao for leitura."""
     if str(metodo).upper() != "GET":
@@ -232,13 +238,29 @@ def request(metodo, path, params=None):
         "Accept": "application/json",
     }
     req = urllib.request.Request(url, method="GET", headers=headers)
-    try:
-        with seguro.abrir(req, timeout=60) as r:
-            bruto = r.read().decode("utf-8", "replace")
-            return json.loads(bruto) if bruto.strip() else {}
-    except urllib.error.HTTPError as e:
-        bruto = e.read().decode("utf-8", "replace")
-        raise ErroDaAPI(e.code, traduzir_erro(e.code, bruto))
+    # O limite de chamadas e da CONTA, nao do aplicativo: se a pessoa tem outra
+    # integracao rodando, o 429 chega sem ela ter feito nada demais. Desistir na
+    # primeira negativa faria uma skill inteira parar no meio por causa de um
+    # segundo de espera. So GET chega aqui, entao repetir e seguro.
+    for tentativa in range(len(ESPERAS) + 1):
+        try:
+            with seguro.abrir(req, timeout=60) as r:
+                bruto = r.read().decode("utf-8", "replace")
+                return json.loads(bruto) if bruto.strip() else {}
+        except urllib.error.HTTPError as e:
+            if e.code not in REPETIVEIS or tentativa >= len(ESPERAS):
+                bruto = e.read().decode("utf-8", "replace")
+                raise ErroDaAPI(e.code, traduzir_erro(e.code, bruto))
+            espera = ESPERAS[tentativa]
+            pedido = e.headers.get("Retry-After") if e.headers else None
+            if pedido:
+                try:
+                    # O servidor sabe melhor que a gente quanto esperar.
+                    espera = max(espera, min(60.0, float(pedido)))
+                except (TypeError, ValueError):
+                    pass
+            e.close()
+            time.sleep(espera)
 
 
 def api(path, params=None):
