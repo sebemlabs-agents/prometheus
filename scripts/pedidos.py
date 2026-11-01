@@ -295,6 +295,15 @@ def coletar(janela=JANELA_PADRAO, hoje=None, teto=MAX_PAGINAS):
             "do que foi vendido de verdade"
         )
 
+    # Numero sem regra de contagem nao da para conferir com nada. O painel do
+    # Mercado Livre conta de outro jeito, e sem dizer o criterio ninguem sabe se
+    # a diferenca e erro ou recorte. Entao o recorte vai escrito, sempre.
+    avisos.append(
+        "contagem: pedidos com situação paga, pela data em que o pedido foi criado, "
+        "entre %s e %s, contados um por pedido. O painel do Mercado Livre usa outro "
+        "recorte e costuma dar um número diferente" % (primeiro.isoformat(), hoje.isoformat())
+    )
+
     if sem_valor:
         avisos.append("%d pedido(s) pago(s) vieram sem valor e ficaram de fora da soma: "
                       "o faturamento abaixo é um subtotal" % sem_valor)

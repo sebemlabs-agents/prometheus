@@ -1890,3 +1890,12 @@ def test_respeita_a_espera_que_o_servidor_pediu(monkeypatch):
     monkeypatch.setattr(meli.time, "sleep", lambda s: esperas.append(s))
     assert meli.request("GET", "/x") == {"ok": True}
     assert esperas == [30.0]
+
+
+def test_pedidos_diz_como_contou(pedidos_api):
+    pedidos_api([[_pedido("a", 100.0)]])
+    d = pedidos.coletar(hoje=HOJE)
+    texto = " ".join(d["avisos"])
+    assert "contagem:" in texto
+    assert "data em que o pedido foi criado" in texto
+    assert "um por pedido" in texto
