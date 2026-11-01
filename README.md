@@ -103,6 +103,7 @@ deve?"*, *"atualiza o painel"*.
 | `prometheus-conectar-shopee` | o mesmo para a Shopee — precisa de um domínio HTTPS seu |
 | `prometheus-conectar-olist` | importa do ERP o **custo** dos produtos — o que o marketplace não tem |
 | `prometheus-painel` | o painel local com os blocos das skills que você rodou |
+| `prometheus-pedidos` | quanto você vendeu, os últimos pedidos, e a comissão que veio em cada item |
 | `prometheus-promocoes` | a fila do que termina nos próximos dias, com anúncios dentro e desconto mínimo |
 | `prometheus-planilha` | lê qualquer CSV ou XLSX seu e cruza com o painel — sem formato obrigatório |
 
