@@ -1633,15 +1633,35 @@ def test_pedidos_pago_sem_valor_nao_soma_e_marca_parcial(pedidos_api):
 def test_pedidos_linha_sem_tarifa_vira_null_no_item(pedidos_api):
     pedidos_api([[_pedido("a", 100.0, linhas=[{"sale_fee": None}])]])
     d = pedidos.coletar(hoje=HOJE)
-    assert d["itens"][0]["linhas"][0]["tarifa"] is None
-
-
-def test_pedidos_comissao_total_e_null_enquanto_a_unidade_nao_foi_confirmada(pedidos_api):
-    pedidos_api([[_pedido("a", 100.0)]])
-    d = pedidos.coletar(hoje=HOJE)
+    assert d["itens"][0]["linhas"][0]["tarifa_por_unidade"] is None
+    assert d["itens"][0]["linhas"][0]["tarifa_da_linha"] is None
     assert d["resumo"]["comissao_total"] is None
     assert "comissao_total" in d["faltando"]
-    assert "comissao_total" in d["lacunas"]
+
+
+def test_pedidos_tarifa_e_por_unidade_entao_multiplica_pela_quantidade(pedidos_api):
+    # Medido contra conta real: o mesmo anuncio em quantidades diferentes manteve a
+    # tarifa quase igual. Tratar como total da linha dividiria a comissao pela
+    # quantidade, e o numero continuaria plausivel.
+    pedidos_api([[_pedido("a", 100.0, linhas=[{"quantity": 10, "unit_price": 10.0,
+                                               "sale_fee": 1.67}])]])
+    d = pedidos.coletar(hoje=HOJE)
+    linha = d["itens"][0]["linhas"][0]
+    assert linha["tarifa_por_unidade"] == 1.67
+    assert linha["tarifa_da_linha"] == 16.7
+    assert d["resumo"]["comissao_total"] == 16.7
+
+
+def test_pedidos_diz_o_que_a_comissao_nao_cobre(pedidos_api):
+    pedidos_api([[_pedido("a", 100.0)]])
+    d = pedidos.coletar(hoje=HOJE)
+    assert any("estorno" in a for a in d["avisos"])
+
+
+def test_pedidos_comissao_nao_soma_entre_moedas(pedidos_api):
+    pedidos_api([[_pedido("a", 100.0), _pedido("b", 50.0, moeda="USD")]])
+    d = pedidos.coletar(hoje=HOJE)
+    assert d["resumo"]["comissao_total"] is None
 
 
 def test_pedidos_duas_moedas_nao_somam(pedidos_api):
