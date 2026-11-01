@@ -29,16 +29,28 @@ O painel mostra os dois. O primeiro é a venda: preço × quantidade. O segundo 
 do comprador, que pode incluir frete e descontos. **Não afirme o que explica a diferença** —
 só conferindo pedido a pedido dá para dizer se é frete, desconto ou devolução.
 
-### 2. A tarifa aparece por item, e não é somada — de propósito
+### 2. A comissão é por unidade, e não é a conta final
 
-Cada item mostra a tarifa que veio no pedido. **O total não existe ainda**, e o painel diz
-por quê: falta confirmar, contra pedido real, se o valor que a API manda é **por unidade ou
-pela linha inteira**. Somar errado dá um número plausível e errado, que é o pior tipo.
+Cada item traz a tarifa **de uma unidade**; o total da linha é ela vezes a quantidade. Isso
+foi **medido** contra conta real, não suposto: o mesmo anúncio vendido em quantidade 1, 2, 6,
+10 e 15 manteve a tarifa quase igual. Na janela inteira a comissão deu **12,4% do
+faturamento**, que é a faixa do Mercado Livre.
 
-Se o usuário perguntar o total de comissão, explique isso em uma frase e ofereça o cálculo
-na conversa, deixando claro qual hipótese você usou.
+**O que ela não cobre, e precisa ser dito:** ajuste, estorno e taxa cobrada fora do pedido.
+É a comissão informada no pedido no momento da coleta — não a fatura.
 
-### 3. É o estado de agora, não um histórico
+### 3. O número diz como foi contado
+
+Junto dos valores vai a regra: situação contada, qual data foi usada, o intervalo e a unidade
+(um por pedido). **O painel do Mercado Livre conta de outro jeito e costuma dar um número
+maior** — numa conta real deu 814 vendas contra 720 pedidos pagos aqui, com preço médio por
+venda praticamente igual.
+
+Quando o usuário estranhar a diferença, **não diga que um dos dois está errado.** Mostre a
+regra de contagem que está no arquivo e explique que são recortes diferentes. Se ele quiser
+chegar ao fundo, a conferência é pedido a pedido, nunca pelo total.
+
+### 4. É o estado de agora, não um histórico
 
 Pedido pago hoje e cancelado amanhã sai da soma na próxima leitura. O arquivo é sobrescrito;
 o pacote não guarda retrato anterior.
@@ -56,5 +68,10 @@ diferentes produz um número que não existe.
 ## Quando dá erro
 
 Falha de rede e falha de autorização **nunca** viram "zero vendas" — o programa para e diz.
+
+Se o Mercado Livre reclamar de excesso de chamadas, o programa **espera e tenta de novo
+sozinho**, até três vezes, respeitando o tempo que o servidor pedir. O limite é da conta, não
+do aplicativo: quem tem outra integração rodando pode esbarrar nele sem ter feito nada. Se
+ainda assim parar, espere um minuto e rode de novo.
 Se ele parar dizendo que não há autorização, a skill `prometheus-conectar-meli` resolve, e a
 tabela de sintomas dela está em `references/problemas.md`.
