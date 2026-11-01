@@ -1899,3 +1899,46 @@ def test_pedidos_diz_como_contou(pedidos_api):
     assert "contagem:" in texto
     assert "data em que o pedido foi criado" in texto
     assert "um por pedido" in texto
+
+
+def test_pedidos_quantidade_zero_nao_vira_comissao_zero(pedidos_api):
+    pedidos_api([[_pedido("a", 100.0, linhas=[{"quantity": 0, "sale_fee": 1.67}])]])
+    d = pedidos.coletar(hoje=HOJE)
+    assert d["itens"][0]["linhas"][0]["unidades"] is None
+    assert d["itens"][0]["linhas"][0]["tarifa_da_linha"] is None
+    assert d["resumo"]["comissao_total"] is None
+
+
+def test_pedidos_quantidade_negativa_nao_reduz_o_total(pedidos_api):
+    pedidos_api([[_pedido("a", 100.0, linhas=[{"quantity": -3, "sale_fee": 1.67}])]])
+    d = pedidos.coletar(hoje=HOJE)
+    assert d["itens"][0]["linhas"][0]["unidades"] is None
+    assert d["resumo"]["comissao_total"] is None
+
+
+def test_pedidos_quantidade_infinita_nao_derruba_a_coleta(pedidos_api):
+    pedidos_api([[_pedido("a", 100.0, linhas=[{"quantity": float("inf")}]),
+                  _pedido("b", 100.0, linhas=[{"quantity": float("nan")}])]])
+    d = pedidos.coletar(hoje=HOJE)
+    assert all(l["unidades"] is None for i in d["itens"] for l in i["linhas"])
+
+
+def test_pedidos_multiplicacao_que_estoura_vira_null(pedidos_api):
+    pedidos_api([[_pedido("a", 100.0, linhas=[{"quantity": 2, "sale_fee": 1e308}])]])
+    d = pedidos.coletar(hoje=HOJE)
+    assert d["itens"][0]["linhas"][0]["tarifa_da_linha"] is None
+    assert d["resumo"]["comissao_total"] is None
+
+
+def test_pedidos_comissao_nao_e_total_quando_a_coleta_foi_parcial(pedidos_api):
+    pedidos_api([[_pedido(str(i)) for i in range(50)], [_pedido("x")]], erro_na_pagina=1)
+    d = pedidos.coletar(hoje=HOJE)
+    assert d["resumo"]["completo"] is False
+    assert d["resumo"]["comissao_total"] is None
+    assert "comissao_total" in d["faltando"]
+
+
+def test_pedidos_comissao_nao_e_total_quando_houve_registro_descartado(pedidos_api):
+    pedidos_api([[_pedido("a", 100.0), dict(_pedido("b", 50.0), id=None)]])
+    d = pedidos.coletar(hoje=HOJE)
+    assert d["resumo"]["comissao_total"] is None
