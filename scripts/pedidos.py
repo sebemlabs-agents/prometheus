@@ -38,10 +38,15 @@ FUSO = dt.timezone(dt.timedelta(hours=-3))
 # Enquanto a unidade da tarifa nao for confirmada contra pedido real, o total nao
 # existe. A spec diz como confirmar: mesmo anuncio em quantidades diferentes, mais
 # a tarifa publicada para uma unidade naquele preco.
-LACUNA_TARIFA = (
-    "ainda não dá para somar a tarifa: falta confirmar, num pedido de verdade, se o "
-    "valor que a API manda é por unidade ou pela linha inteira. Cada item mostra o "
-    "valor que veio, sem somar"
+# Medido contra conta real em 31/10/2026: a tarifa que a API manda e POR UNIDADE.
+# O mesmo anuncio a R$ 10,63 vendido em quantidade 1, 2, 6, 10 e 15 teve tarifa de
+# 1,75 / 1,75 / 1,67 / 1,67 / 1,67 — se fosse da linha, a de 15 seria quinze vezes
+# maior. Entao o total da linha e tarifa x quantidade. Tratar como total da linha
+# dividiria a comissao pela quantidade, e o numero continuaria plausivel.
+AVISO_TARIFA = (
+    "a comissão é a informada no pedido no momento da coleta, por unidade, "
+    "multiplicada pela quantidade. Ajuste, estorno ou taxa cobrada fora do pedido "
+    "não aparecem aqui"
 )
 
 
@@ -80,14 +85,23 @@ def _linhas(pedido):
     saida = []
     for linha in (pedido.get("order_items") or []):
         anuncio = linha.get("item") or {}
+        unidades = _inteiro(linha.get("quantity"))
+        tarifa = _numero(linha.get("sale_fee"))
         saida.append({
             "mlb": anuncio.get("id") or linha.get("item_id"),
             "titulo": anuncio.get("title"),
-            "unidades": _inteiro(linha.get("quantity")),
+            "unidades": unidades,
             "preco_unitario": _numero(linha.get("unit_price")),
-            "tarifa": _numero(linha.get("sale_fee")),
+            "tarifa_por_unidade": tarifa,
+            "tarifa_da_linha": (None if tarifa is None or unidades is None
+                                else round(tarifa * unidades, 2)),
         })
     return saida
+
+
+def moeda_segura_pre(moedas, sem_moeda):
+    """Somar so vale com a janela inteira numa moeda conhecida."""
+    return len(moedas) <= 1 and not sem_moeda
 
 
 def _buscar(conta, de, ate, teto, sem_id):
@@ -166,6 +180,8 @@ def coletar(janela=JANELA_PADRAO, hoje=None, teto=MAX_PAGINAS):
     sem_itens = 0
     sem_moeda = 0
     unidade_desconhecida = False
+    comissao = 0.0
+    tarifa_desconhecida = False
 
     for pedido in vistos.values():
         situacao = (pedido.get("status") or "").lower()
@@ -198,6 +214,14 @@ def coletar(janela=JANELA_PADRAO, hoje=None, teto=MAX_PAGINAS):
             sem_itens += 1
         # Um pedido com quantidade faltando nao pode estragar a contagem do
         # pedido seguinte: o indicador e POR PEDIDO, e so depois sobe para o resumo.
+        for linha in linhas:
+            if linha["tarifa_da_linha"] is None:
+                tarifa_desconhecida = True
+            else:
+                comissao += linha["tarifa_da_linha"]
+        if not linhas:
+            tarifa_desconhecida = True
+
         falta_aqui = (not linhas) or any(l["unidades"] is None for l in linhas)
         if falta_aqui:
             unidade_desconhecida = True
@@ -220,13 +244,23 @@ def coletar(janela=JANELA_PADRAO, hoje=None, teto=MAX_PAGINAS):
     faltando = []
     lacunas = {}
 
-    # A tarifa aparece item a item, mas nao e somada. Ver LACUNA_TARIFA.
-    faltando.append("comissao_total")
-    lacunas["comissao_total"] = LACUNA_TARIFA
+    if tarifa_desconhecida or not moeda_segura_pre(moedas, sem_moeda):
+        comissao_total = None
+        faltando.append("comissao_total")
+        lacunas["comissao_total"] = (
+            "algum item veio sem tarifa ou sem quantidade, então a soma seria menor "
+            "do que a comissão real"
+            if tarifa_desconhecida else
+            "a janela tem mais de uma moeda, e somar comissão de moedas diferentes "
+            "daria um número que não existe"
+        )
+    else:
+        comissao_total = round(comissao, 2)
+        avisos.append(AVISO_TARIFA)
 
     # Somar so vale quando TODA a janela esta numa moeda conhecida. Moeda ausente
     # conta como desconhecida: somar com os reais daria um numero que nao existe.
-    moeda_segura = len(moedas) <= 1 and not sem_moeda
+    moeda_segura = moeda_segura_pre(moedas, sem_moeda)
     if not moeda_segura:
         faturamento = None
         pago_total = None
@@ -285,7 +319,7 @@ def coletar(janela=JANELA_PADRAO, hoje=None, teto=MAX_PAGINAS):
         "faturamento": faturamento,
         "pago_pelo_comprador": pago_total,
         "ticket_medio": ticket,
-        "comissao_total": None,
+        "comissao_total": comissao_total,
         "completo": completo,
     }
 
