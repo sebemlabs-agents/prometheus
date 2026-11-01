@@ -25,6 +25,7 @@ Armadilhas que este script evita de proposito:
 Compatibilidade: Python 3.8+.
 """
 import datetime as dt
+import math
 import sys
 
 import contrato
@@ -65,20 +66,37 @@ def _numero(valor):
     if isinstance(valor, bool) or not isinstance(valor, (int, float)):
         return None
     numero = float(valor)
-    if numero != numero or numero in (float("inf"), float("-inf")):
+    if not math.isfinite(numero):
         return None
     return numero
 
 
 def _inteiro(valor):
-    """Quantidade so vale se for inteira de verdade. 1.9 nao vira 1."""
+    """Quantidade so vale se for inteira e POSITIVA. 1.9 nao vira 1.
+
+    Zero e negativo nao sao quantidade de venda. Aceitar zero faria a tarifa da
+    linha virar 0,00 sem lacuna nenhuma; aceitar negativo reduziria o total.
+    A finitude e conferida ANTES do int(), porque int(inf) e int(nan) levantam.
+    """
     if isinstance(valor, bool):
         return None
     if isinstance(valor, int):
-        return valor
-    if isinstance(valor, float) and valor == int(valor) and valor == valor:
+        return valor if valor > 0 else None
+    if isinstance(valor, float):
+        if not math.isfinite(valor) or valor != int(valor) or valor <= 0:
+            return None
         return int(valor)
     return None
+
+
+def _produto(a, b):
+    """a x b, ou None quando algum lado falta ou o resultado estoura."""
+    if a is None or b is None:
+        return None
+    resultado = a * b
+    if not math.isfinite(resultado):
+        return None
+    return round(resultado, 2)
 
 
 def _linhas(pedido):
@@ -93,8 +111,7 @@ def _linhas(pedido):
             "unidades": unidades,
             "preco_unitario": _numero(linha.get("unit_price")),
             "tarifa_por_unidade": tarifa,
-            "tarifa_da_linha": (None if tarifa is None or unidades is None
-                                else round(tarifa * unidades, 2)),
+            "tarifa_da_linha": _produto(tarifa, unidades),
         })
     return saida
 
@@ -243,13 +260,22 @@ def coletar(janela=JANELA_PADRAO, hoje=None, teto=MAX_PAGINAS):
 
     faltando = []
     lacunas = {}
+    completo = not parcial and not sem_valor and not sem_id[0]
+
+    # Comissao so e total quando a coleta inteira veio. Pagina que falhou, teto
+    # atingido ou registro descartado deixam linhas de fora, e um numero nessas
+    # condicoes seria consumido como total da janela.
+    if not completo:
+        tarifa_desconhecida = True
+    if not math.isfinite(comissao):
+        tarifa_desconhecida = True
 
     if tarifa_desconhecida or not moeda_segura_pre(moedas, sem_moeda):
         comissao_total = None
         faltando.append("comissao_total")
         lacunas["comissao_total"] = (
-            "algum item veio sem tarifa ou sem quantidade, então a soma seria menor "
-            "do que a comissão real"
+            "a coleta não veio inteira ou algum item veio sem tarifa ou sem "
+            "quantidade, então esta soma seria menor do que a comissão real"
             if tarifa_desconhecida else
             "a janela tem mais de uma moeda, e somar comissão de moedas diferentes "
             "daria um número que não existe"
@@ -315,8 +341,6 @@ def coletar(janela=JANELA_PADRAO, hoje=None, teto=MAX_PAGINAS):
                       "a contagem abaixo pode estar menor do que a real" % sem_id[0])
     if sem_itens:
         avisos.append("%d pedido(s) vieram sem item nenhum" % sem_itens)
-
-    completo = not parcial and not sem_valor and not sem_id[0]
 
     ticket = None
     if faturamento is not None and pagos and completo:
