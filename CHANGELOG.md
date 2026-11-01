@@ -23,6 +23,33 @@
 > 4. anotar a mudança aqui embaixo
 > 5. publicar pelo Cypher Guard
 
+## 1.3.0 — 31 de outubro de 2026
+
+**Skill nova: `prometheus-pedidos`.** Quanto a loja vendeu na janela, os últimos pedidos, e a
+comissão que veio em cada item. É o primeiro leitor do pacote no desenho novo: **a skill abre
+a torneira, o Claude cruza, o painel mostra.**
+
+Validada contra conta real antes de entrar — e foi a validação que ensinou o que importa:
+
+- **A comissão do pedido é por unidade, não pela linha.** Medido: o mesmo anúncio vendido em
+  quantidade 1, 2, 6, 10 e 15 manteve a tarifa praticamente igual. Tratar como total da linha
+  dividiria a comissão pela quantidade, e o número continuaria plausível — o pior tipo de
+  erro. Na janela inteira a comissão fecha em 12,4% do faturamento.
+- **O número diz como foi contado.** Junto dos valores vai a regra: situação contada, qual
+  data foi usada, o intervalo, e a unidade. O painel do Mercado Livre usa outro recorte e
+  costuma dar um número maior — com a regra escrita, dá para comparar em vez de discutir.
+- **Faturamento e desembolso do comprador são números diferentes**, e aparecem separados.
+- **Nada do comprador é gravado.** O arquivo guarda só o que o contrato pede.
+
+**Correção que vale para todas as skills:** o limite de chamadas do Mercado Livre
+derrubava a coleta no meio. O limite é da **conta**, não do aplicativo — quem tem outra
+integração rodando esbarra nele sem ter feito nada. Agora o pacote espera e tenta de novo
+sozinho, respeitando o tempo que o servidor pedir, e nunca insiste em erro de autorização.
+
+**O que este leitor nunca apresenta como total:** coleta que não veio inteira, soma com
+moedas diferentes, ou agregado com parcela faltando. Nesses casos o número vem vazio, com a
+explicação do lado — porque subtotal com cara de total é o jeito mais caro de errar.
+
 ## 1.2.0 — 31 de outubro de 2026
 
 **Saem quatro skills.** O pacote passa a entregar só o que foi provado contra servidor real.
