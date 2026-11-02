@@ -20,6 +20,7 @@ margem depois do desconto, e o desconto exigido anuncio a anuncio.
 Compatibilidade: Python 3.8+.
 """
 import datetime as dt
+import math
 import sys
 
 import contrato
@@ -37,6 +38,11 @@ AMPLO = ("DEAL", "MARKETPLACE_CAMPAIGN", "PRICE_MATCHING", "PRICE_MATCHING_MELI_
          "SMART", "PRE_NEGOTIATED")
 
 ADERIDO = ("started", "active")
+ELEGIVEL = ("candidate", "pending")
+
+# Estado que nao esta em nenhuma das duas listas NAO vira elegivel por descarte:
+# campanha encerrada apareceria como oportunidade, e o vendedor correria atras de
+# uma porta fechada.
 
 
 def quando(iso):
@@ -54,11 +60,16 @@ def quando(iso):
 
 
 def _num(v):
-    """Percentual pode vir como texto, None, ou numero. Nunca invente zero."""
-    if v is None or v == "":
+    """Percentual pode vir como texto, None, ou numero. Nunca invente zero.
+
+    Recusa bool: `True` viraria 1%. Recusa infinito e NaN, inclusive escritos por
+    extenso ("NaN", "Infinity"), que o float() aceita sem reclamar.
+    """
+    if v is None or v == "" or isinstance(v, bool):
         return None
     try:
-        return round(float(v), 2)
+        n = round(float(v), 2)
+        return n if math.isfinite(n) else None
     except (TypeError, ValueError):
         return None
 
@@ -87,6 +98,7 @@ def itens_da_promocao(pid, tipo, buscar=True):
     params = {"app_version": "v2", "promotion_type": tipo, "limit": POR_PAGINA}
     elegiveis = 0
     aderidos = 0
+    desconhecidos = 0
     meli_pct = []
     seller_pct = []
     visto = None
@@ -95,34 +107,54 @@ def itens_da_promocao(pid, tipo, buscar=True):
         if visto:
             p["search_after"] = visto
         corpo = meli.request("GET", base, p)
-        achados = corpo.get("results") or []
-        if not achados:
-            # Pagina vazia e FIM, nao estouro de teto. Sair por `break` aqui fazia
-            # campanha sem anuncio ser contada como truncada, e o painel escondia
-            # um zero verdadeiro atras de uma lacuna.
-            return {"elegiveis": elegiveis, "aderidos": aderidos, "truncado": False,
-                    "meli_banca": _mediana(meli_pct), "voce_banca": _mediana(seller_pct)}
+        achados = corpo.get("results") if isinstance(corpo, dict) else None
+        paginacao = (corpo.get("paging") or {}) if isinstance(corpo, dict) else {}
+        if not isinstance(achados, list):
+            # Medido contra conta real em 02/11/2026: campanha SEM anuncio nenhum
+            # devolve `results: null` com `paging.total: 0` — nao devolve lista
+            # vazia. Entao `null` sozinho nao prova resposta quebrada, mas tambem
+            # nao prova campanha vazia: quem desempata e o total.
+            if paginacao.get("total") == 0 and not elegiveis and not aderidos:
+                return {"elegiveis": 0, "aderidos": 0, "truncado": False,
+                        "meli_banca": None, "voce_banca": None}
+            # Sem o total dizendo zero, e resposta que nao deu para ler, e
+            # contagem parcial nao pode sair como completa.
+            return _vazio()
         for item in achados:
-            if (item.get("status") or "").lower() in ADERIDO:
+            estado = (item.get("status") or "").lower()
+            if estado in ADERIDO:
                 aderidos += 1
-            else:
+            elif estado in ELEGIVEL:
                 elegiveis += 1
+            else:
+                desconhecidos += 1
             m, s = _num(item.get("meli_percentage")), _num(item.get("seller_percentage"))
-            if m is not None:
-                meli_pct.append(m)
-            if s is not None:
-                seller_pct.append(s)
+            meli_pct.append(m)
+            seller_pct.append(s)
         visto = (corpo.get("paging") or {}).get("searchAfter")
-        if not visto or len(achados) < POR_PAGINA:
+        if not visto:
+            # O cursor e quem diz se acabou. Pagina curta com cursor ainda tem
+            # proxima: inferir fim pelo tamanho da pagina perdia o resto.
+            if desconhecidos:
+                return _vazio()
             return {"elegiveis": elegiveis, "aderidos": aderidos, "truncado": False,
                     "meli_banca": _mediana(meli_pct), "voce_banca": _mediana(seller_pct)}
+    return _vazio(truncado=True)
+
+
+def _vazio(truncado=False):
     return {"elegiveis": None, "aderidos": None, "truncado": True,
             "meli_banca": None, "voce_banca": None}
 
 
 def _mediana(valores):
-    """Mediana, nao media: um anuncio com desconto fora da curva nao desloca."""
-    if not valores:
+    """Mediana, nao media: um anuncio com desconto fora da curva nao desloca.
+
+    `valores` traz UM item por anuncio, com None onde o percentual nao veio.
+    Faltando qualquer um, a mediana sai vazia: mediana de parte da campanha
+    apresentada como mediana da campanha e numero errado com cara de certo.
+    """
+    if not valores or any(v is None for v in valores):
         return None
     ordenados = sorted(valores)
     meio = len(ordenados) // 2

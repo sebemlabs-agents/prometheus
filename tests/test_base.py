@@ -1980,3 +1980,77 @@ def test_promocoes_campanha_sem_anuncio_e_zero_de_verdade_nao_lacuna(api):
     assert d["itens"][0]["anuncios_elegiveis"] == 0
     assert d["itens"][0]["anuncios_aderidos"] == 0
     assert "anuncios_elegiveis" not in d["faltando"]
+
+
+def test_promocoes_resposta_sem_results_e_sem_total_nao_vira_campanha_vazia(api, monkeypatch):
+    api([_promo("a", "X", 2)])
+    monkeypatch.setattr(promocoes.meli, "request",
+                        lambda m, p, par=None: ({"results": [_promo("a", "X", 2)]}
+                                                if "/users/" in p else {"paging": {}}))
+    d = promocoes.coletar(hoje=HOJE)
+    assert d["itens"][0]["anuncios_elegiveis"] is None
+
+
+def test_promocoes_campanha_vazia_de_verdade_vem_como_results_nulo_com_total_zero(api, monkeypatch):
+    # Medido contra conta real: campanha sem anuncio devolve results null, nao
+    # lista vazia. Quem desempata entre "vazia" e "resposta quebrada" e o total.
+    api([_promo("a", "X", 2)])
+    monkeypatch.setattr(promocoes.meli, "request",
+                        lambda m, p, par=None: ({"results": [_promo("a", "X", 2)]}
+                                                if "/users/" in p
+                                                else {"results": None,
+                                                      "paging": {"total": 0, "limit": 50}}))
+    d = promocoes.coletar(hoje=HOJE)
+    assert d["itens"][0]["anuncios_elegiveis"] == 0
+    assert d["itens"][0]["anuncios_aderidos"] == 0
+    assert "anuncios_elegiveis" not in d["faltando"]
+
+
+def test_promocoes_estado_desconhecido_nao_vira_elegivel(api):
+    # Campanha encerrada aparecendo como oportunidade faz o vendedor correr
+    # atras de porta fechada.
+    api([_promo("a", "X", 2)],
+        {"a": [{"status": "finished"}, {"status": None}, {"status": "candidate"}]})
+    d = promocoes.coletar(hoje=HOJE)
+    assert d["itens"][0]["anuncios_elegiveis"] is None
+    assert d["itens"][0]["anuncios_aderidos"] is None
+
+
+def test_promocoes_mediana_so_sai_com_a_campanha_inteira(api):
+    api([_promo("a", "X", 2)],
+        {"a": [{"status": "candidate", "meli_percentage": 10.0},
+               {"status": "candidate", "meli_percentage": "invalido"}]})
+    d = promocoes.coletar(hoje=HOJE)
+    assert d["itens"][0]["meli_banca_pct"] is None
+
+
+def test_promocoes_percentual_booleano_ou_infinito_nao_vale(api):
+    api([_promo("a", "X", 2)],
+        {"a": [{"status": "candidate", "meli_percentage": True,
+                "seller_percentage": "Infinity"}]})
+    d = promocoes.coletar(hoje=HOJE)
+    assert d["itens"][0]["meli_banca_pct"] is None
+    assert d["itens"][0]["voce_banca_pct"] is None
+
+
+def test_promocoes_pagina_curta_com_cursor_continua(api, monkeypatch):
+    paginas = [
+        {"results": [{"status": "candidate", "meli_percentage": 5.0,
+                      "seller_percentage": 9.0}], "paging": {"searchAfter": "x"}},
+        {"results": [{"status": "started", "meli_percentage": 5.0,
+                      "seller_percentage": 9.0}], "paging": {}},
+    ]
+    estado = {"n": 0}
+
+    def request(metodo, caminho, par=None):
+        if "/users/" in caminho:
+            return {"results": [_promo("a", "X", 2)]}
+        pagina = paginas[min(estado["n"], len(paginas) - 1)]
+        estado["n"] += 1
+        return pagina
+
+    api([_promo("a", "X", 2)])
+    monkeypatch.setattr(promocoes.meli, "request", request)
+    d = promocoes.coletar(hoje=HOJE)
+    assert d["itens"][0]["anuncios_elegiveis"] == 1
+    assert d["itens"][0]["anuncios_aderidos"] == 1

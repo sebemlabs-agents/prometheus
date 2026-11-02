@@ -23,6 +23,34 @@
 > 4. anotar a mudança aqui embaixo
 > 5. publicar pelo Cypher Guard
 
+## 1.4.0 — 2 de novembro de 2026
+
+**A fila de promoções passa a dizer a verdade sobre o que está dentro.** A skill existia desde
+a 1.0, mas nunca tinha sido chamada contra a API de verdade. Contra uma conta real, quatro
+coisas apareceram de uma vez:
+
+- **Ela parava sem dizer a causa.** Pedia 100 anúncios por página e o Mercado Livre recusa
+  acima de 50. Qualquer pessoa que rodasse a skill via só "erro 400".
+- **Elegível e aderido estavam somados no mesmo número.** O Mercado Livre chama de
+  *elegível* o anúncio que **pode** entrar na campanha, e de *aderido* o que **já está
+  dentro**. Somar os dois e escrever "38 anúncios na promoção" faz você achar que aderiu
+  quando não aderiu — e a campanha termina com você de fora. Agora são dois números
+  separados, sempre, e a tela usa as duas palavras.
+- **Campanha encerrada podia aparecer como oportunidade**, porque qualquer estado
+  desconhecido caía no balde de "elegível".
+- **Campanha sem anúncio virava lacuna em vez de zero.**
+
+**Novo: quanto do desconto o Mercado Livre banca.** Cada campanha traz a mediana do que o
+Meli subsidia e do que sai do seu bolso. É o que decide se vale aderir — campanha com rebate
+protege margem e ainda dá exposição. Mediana, não média, para um anúncio fora da curva não
+deslocar o número.
+
+**O que esta skill continua não sabendo:** se o desconto cabe na sua margem. A API não tem o
+seu custo por SKU. Peça o cruzamento com a planilha ou com a Olist.
+
+Campanha grande demais para contar inteira vem **vazia com a explicação**, nunca com um
+número parcial.
+
 ## 1.3.0 — 31 de outubro de 2026
 
 **Skill nova: `prometheus-pedidos`.** Quanto a loja vendeu na janela, os últimos pedidos, e a
