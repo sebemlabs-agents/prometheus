@@ -39,6 +39,8 @@ def pasta(tmp_path, monkeypatch):
     monkeypatch.setattr(escrever, "INTENCOES", tmp_path / "intencoes.json")
     (tmp_path / "tokens.json").write_text(json.dumps({
         "user_id": CONTA,
+        "access_token": "TOKEN-SECRETO",
+        "refresh_token": "RENOVA-SECRETO",
         "scope": "read write offline_access %s %s" % (OFERTAS, PERGUNTAS),
     }), encoding="utf-8")
     monkeypatch.setattr(escrever.meli, "get_access_token", lambda: "TOKEN-SECRETO")
@@ -309,7 +311,8 @@ def test_escrita_nao_repete_em_429(pasta, monkeypatch):
     assert len(tentativas) == 1
 
 
-def test_escrita_nao_repete_em_500(pasta, monkeypatch):
+def test_erro_500_e_incerto_e_tranca_o_item(pasta, monkeypatch):
+    """O servidor recebeu e quebrou: isso nao prova que nao aplicou."""
     tentativas = []
 
     def falso(req, timeout=30):
@@ -317,10 +320,11 @@ def test_escrita_nao_repete_em_500(pasta, monkeypatch):
         raise _http(500, {"message": "quebrou"})
 
     monkeypatch.setattr(escrever.seguro, "abrir", falso)
-    with pytest.raises(escrever.ErroNaEscrita):
+    with pytest.raises(escrever.RespostaIncerta):
         escrever.enviar("aderir", "/seller-promotions/items/MLB123",
                         corpo={"promotion_id": "P-1"}, anuncio="MLB123")
     assert len(tentativas) == 1
+    assert escrever.pendencias("MLB123")
 
 
 def test_corrida_de_oferta_e_sinalizada_para_quem_chama_decidir(pasta, monkeypatch):
@@ -723,11 +727,34 @@ def test_responder_sem_confirmacao_nao_manda_reenviar(perguntas_api, capsys):
     assert "NAO reenvie" in saida
 
 
-def test_responder_texto_normalizado_pelo_meli_nao_e_falha(perguntas_api, capsys):
+def test_responder_diferenca_de_espaco_ainda_e_a_sua_resposta(perguntas_api):
+    """A unica normalizacao admitida e a demonstrada: espaco."""
     cod = responder.conferir(PERGUNTA["id"], "Cabe sim.")
-    perguntas_api["efeito"] = _publicou("Cabe sim")
+    perguntas_api["efeito"] = _publicou("  Cabe   sim.  ")
     assert responder.fazer(cod) == 0
-    assert "caracteres" in capsys.readouterr().out
+
+
+def test_responder_resposta_de_outro_nao_vira_confirmacao_sua(perguntas_api, capsys):
+    """Outra integracao respondeu na mesma janela: dizer 'feito' aqui seria
+    assinar o texto de outra pessoa."""
+    cod = responder.conferir(PERGUNTA["id"], "Cabe sim, 60 cm.")
+    perguntas_api["efeito"] = _publicou("Nao temos esse produto.")
+    assert responder.fazer(cod) == 1
+    assert "NAO e a sua" in capsys.readouterr().out
+
+
+def test_responder_codigo_de_outra_pergunta_nao_publica(perguntas_api):
+    cod = responder.conferir(PERGUNTA["id"], "Cabe sim.")
+    with pytest.raises(responder.NaoDaParaResponder) as e:
+        responder.fazer(cod, 999999)
+    assert "999999" in str(e.value)
+    assert not perguntas_api["envios"]
+
+
+def test_responder_sem_confirmar_deixa_a_pergunta_trancada(perguntas_api):
+    cod = responder.conferir(PERGUNTA["id"], "Cabe sim.")
+    assert responder.fazer(cod) == 1
+    assert escrever.pendencias("pergunta-%s" % PERGUNTA["id"])
 
 
 def test_responder_recibo_nao_guarda_o_texto(perguntas_api, pasta):
@@ -818,3 +845,181 @@ def test_os_dois_manifestos_do_pacote_de_acoes_concordam_na_versao():
                    .read_text(encoding="utf-8"))
     assert a["version"] == b["version"]
     assert a["name"] == b["name"]
+
+
+# ======================= o que a lente de seguranca pegou (02/11, rodada 2)
+
+def test_transporte_aceito_nao_fecha_a_tentativa(pasta, monkeypatch):
+    """201 nao e resultado: fechar aqui destravaria o item na propagacao, que e
+    exatamente a janela em que o 201 ja mentiu nesta casa."""
+    monkeypatch.setattr(escrever.seguro, "abrir",
+                        lambda req, timeout=30: _resposta({"ok": True}))
+    r = escrever.enviar("aderir", "/seller-promotions/items/MLB123",
+                        corpo={"promotion_id": "P-1"}, anuncio="MLB123")
+    assert escrever.pendencias("MLB123")
+    escrever.confirmado(r["recibo"], "conferido")
+    assert not escrever.pendencias("MLB123")
+
+
+def test_o_id_da_tentativa_nao_e_curto_demais(pasta):
+    ident = escrever.abrir_tentativa("aderir", "MLB1", "x")
+    assert len(ident) >= 12
+
+
+def test_pendencia_sobrevive_ao_arquivamento_do_recibo(pasta, monkeypatch):
+    """Renomear o recibo nao pode destravar um anuncio incerto."""
+    escrever.abrir_tentativa("aderir", "MLB123", "x")
+    (pasta / "acoes.txt").rename(pasta / "acoes-2026.txt")
+    assert escrever.pendencias("MLB123")
+
+
+def test_recibo_ilegivel_recusa_em_vez_de_dizer_que_nao_tem_nada(pasta, monkeypatch):
+    escrever.abrir_tentativa("aderir", "MLB123", "x")
+    os.chmod(pasta / "acoes.txt", 0o000)
+    try:
+        with pytest.raises(escrever.ReciboIlegivel):
+            escrever.pendencias("MLB123")
+    finally:
+        os.chmod(pasta / "acoes.txt", 0o600)
+
+
+def test_duas_execucoes_no_mesmo_item_nao_correm_juntas(pasta):
+    with escrever.trava("MLB123"):
+        with pytest.raises(escrever.ItemTrancado):
+            with escrever.trava("MLB123"):
+                pass
+    with escrever.trava("MLB123"):      # liberou no fim do bloco
+        pass
+
+
+def test_a_trava_e_por_item(pasta):
+    with escrever.trava("MLB123"):
+        with escrever.trava("MLB999"):
+            pass
+
+
+def test_conferir_de_novo_revoga_a_conferencia_anterior(pasta):
+    base = {"conta": CONTA, "acao": "responder", "pergunta": 42}
+    velho = escrever.guardar_intencao(dict(base, texto="rascunho ruim"))
+    novo = escrever.guardar_intencao(dict(base, texto="texto certo"))
+    with pytest.raises(escrever.ConferenciaInvalida):
+        escrever.consumir_intencao(velho)
+    assert escrever.consumir_intencao(novo)["texto"] == "texto certo"
+
+
+def test_conferencia_de_outro_alvo_nao_e_revogada(pasta):
+    a = escrever.guardar_intencao({"conta": CONTA, "acao": "responder", "pergunta": 1})
+    escrever.guardar_intencao({"conta": CONTA, "acao": "responder", "pergunta": 2})
+    assert escrever.consumir_intencao(a)
+
+
+def test_intencao_vencida_sai_do_disco(pasta, monkeypatch):
+    escrever.guardar_intencao({"conta": CONTA, "acao": "responder", "pergunta": 7,
+                               "texto": "rascunho que nao deve ficar"})
+    depois = time.time() + escrever.VALIDADE + 1
+    monkeypatch.setattr(escrever.time, "time", lambda: depois)
+    escrever._ler_intencoes()
+    assert "rascunho que nao deve ficar" not in \
+        (pasta / "intencoes.json").read_text(encoding="utf-8")
+
+
+def test_token_no_campo_error_tambem_e_limpo(pasta, monkeypatch):
+    monkeypatch.setattr(escrever.seguro, "abrir",
+                        lambda req, timeout=30: (_ for _ in ()).throw(
+                            _http(400, {"error": "TOKEN-SECRETO vazou aqui"})))
+    with pytest.raises(escrever.ErroNaEscrita) as e:
+        escrever.enviar("aderir", "/seller-promotions/items/MLB123",
+                        corpo={"promotion_id": "P-1"}, anuncio="MLB123")
+    assert "TOKEN-SECRETO" not in str(e.value)
+    assert "TOKEN-SECRETO" not in (pasta / "acoes.txt").read_text(encoding="utf-8")
+
+
+def test_token_no_fim_de_mensagem_longa_nao_escapa_pelo_corte(pasta, monkeypatch):
+    """Limpar depois de truncar deixaria meio token na mensagem."""
+    longa = "x" * 290 + " TOKEN-SECRETO " + "y" * 50
+    monkeypatch.setattr(escrever.seguro, "abrir",
+                        lambda req, timeout=30: (_ for _ in ()).throw(
+                            _http(400, {"message": longa})))
+    with pytest.raises(escrever.ErroNaEscrita) as e:
+        escrever.enviar("aderir", "/seller-promotions/items/MLB123",
+                        corpo={"promotion_id": "P-1"}, anuncio="MLB123")
+    assert "TOKEN-SECRET" not in str(e.value)
+
+
+def test_codigo_de_erro_fora_de_formato_nao_e_tratado_como_codigo(pasta, monkeypatch):
+    monkeypatch.setattr(escrever.seguro, "abrir",
+                        lambda req, timeout=30: (_ for _ in ()).throw(
+                            _http(400, {"cause": [{"error_code": "TOKEN-SECRETO " * 20}]})))
+    with pytest.raises(escrever.ErroNaEscrita) as e:
+        escrever.enviar("aderir", "/seller-promotions/items/MLB123",
+                        corpo={"promotion_id": "P-1"}, anuncio="MLB123")
+    assert "TOKEN-SECRETO" not in str(e.value)
+
+
+def test_promover_codigo_de_aderir_nao_executa_com_sair_na_linha(conta_api):
+    """O comando que a pessoa digita tem de descrever o que vai acontecer."""
+    cod = promover.conferir("aderir", "MLB123", "P-MLB1")
+    with pytest.raises(promover.NaoDaParaFazer) as e:
+        promover.fazer(cod, "sair", "MLB123", "P-MLB1")
+    assert "acao" in str(e.value)
+    assert not conta_api["envios"]
+
+
+def test_promover_codigo_de_outro_anuncio_nao_executa(conta_api):
+    cod = promover.conferir("aderir", "MLB123", "P-MLB1")
+    with pytest.raises(promover.NaoDaParaFazer):
+        promover.fazer(cod, "aderir", "MLB999", "P-MLB1")
+    assert not conta_api["envios"]
+
+
+def test_promover_codigo_de_outra_campanha_nao_executa(conta_api):
+    cod = promover.conferir("aderir", "MLB123", "P-MLB1")
+    with pytest.raises(promover.NaoDaParaFazer):
+        promover.fazer(cod, "aderir", "MLB123", "P-OUTRA")
+    assert not conta_api["envios"]
+
+
+def test_promover_adesao_confirmada_destrava_o_anuncio(conta_api):
+    cod = promover.conferir("aderir", "MLB123", "P-MLB1")
+    conta_api["efeito"] = _entrou
+    assert promover.fazer(cod) == 0
+    assert not escrever.pendencias("MLB123")
+
+
+def test_promover_adesao_nao_confirmada_deixa_trancado(conta_api):
+    cod = promover.conferir("aderir", "MLB123", "P-MLB1")
+    assert promover.fazer(cod) == 1
+    assert escrever.pendencias("MLB123")
+
+
+def test_promover_saida_com_preco_que_nao_volta_nao_e_confirmada(conta_api, capsys):
+    conta_api["cands"][0]["status"] = "started"
+    conta_api["item"]["price"] = 80.0
+    cod = promover.conferir("sair", "MLB123", "P-MLB1")
+    # saiu da campanha, mas o preco promocional ficou
+    conta_api["efeito"] = lambda e: e["cands"][0].update({"status": "candidate"})
+    assert promover.fazer(cod) == 1
+    assert "o preco eu nao confirmo" in capsys.readouterr().out
+
+
+def test_promover_saida_em_pending_nao_conta_como_saida(conta_api, capsys):
+    conta_api["cands"][0]["status"] = "started"
+    conta_api["item"]["price"] = 80.0
+    cod = promover.conferir("sair", "MLB123", "P-MLB1")
+    conta_api["efeito"] = lambda e: e["cands"][0].update({"status": "pending"})
+    assert promover.fazer(cod) == 1
+    assert "esperava candidato" in capsys.readouterr().out
+
+
+def test_promover_saida_em_outra_oferta_nao_e_confirmada(conta_api, capsys):
+    conta_api["cands"][0]["status"] = "started"
+    conta_api["item"]["price"] = 80.0
+    cod = promover.conferir("sair", "MLB123", "P-MLB1")
+
+    def outra(e):
+        e["cands"][0].update({"status": "candidate", "ref_id": "CANDIDATE-OUTRA"})
+        e["item"]["price"] = 100.0
+
+    conta_api["efeito"] = outra
+    assert promover.fazer(cod) == 1
+    assert "oferta diferente" in capsys.readouterr().out

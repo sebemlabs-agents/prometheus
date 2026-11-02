@@ -32,6 +32,7 @@ O que esta porta faz de diferente de um urlopen solto, e por que:
 
 Compatibilidade: Python 3.8+.
 """
+import contextlib
 import hashlib
 import json
 import os
@@ -128,6 +129,10 @@ class ReciboImpossivel(RuntimeError):
     """Nao deu para gravar o recibo. Acao sem recibo nao acontece."""
 
 
+class ReciboIlegivel(RuntimeError):
+    """Nao deu para ler o recibo. Nao sei se ha pendencia: nao agir."""
+
+
 class ReciboNoTeto(RuntimeError):
     """O conjunto de recibos chegou ao teto."""
 
@@ -201,7 +206,7 @@ def exigir_espaco():
         )
 
 
-def _anexar(linha):
+def _anexar(linha, ja_enviou=False):
     try:
         # De proposito NAO cria a pasta: o recibo mora na pasta da pessoa, que
         # ja existe. Pasta faltando e caminho errado, e caminho errado nao pode
@@ -211,6 +216,12 @@ def _anexar(linha):
             f.flush()
             os.fsync(f.fileno())
     except OSError as e:
+        if ja_enviou:
+            # Mentir aqui seria pior que o problema: a chamada JA saiu.
+            raise ReciboImpossivel(
+                "A acao JA FOI ENVIADA, mas nao deu para registrar o resultado "
+                "em %s (%s). Anote por fora e confira o estado real na conta."
+                % (RECIBO, e.__class__.__name__))
         raise ReciboImpossivel(
             "Nao deu para escrever o recibo em %s (%s). Acao sem recibo nao "
             "acontece: nada foi enviado." % (RECIBO, e.__class__.__name__)
@@ -219,17 +230,21 @@ def _anexar(linha):
 
 def abrir_tentativa(acao, anuncio, nota):
     """Grava a linha 'tentando' ANTES do envio e devolve o id dela."""
+    # 12 hex, nao 4: com 4 sao 65 mil identificadores, e duas tentativas com o
+    # mesmo id fazem o fechamento de uma apagar a PENDENCIA da outra — ou seja,
+    # destravam um anuncio que ninguem conferiu.
     ident = hashlib.sha256(
-        ("%s|%s|%.6f|%s" % (acao, anuncio, time.time(), os.urandom(4).hex()))
-        .encode()).hexdigest()[:4]
+        ("%s|%s|%.6f|%s" % (acao, anuncio, time.time(), os.urandom(8).hex()))
+        .encode()).hexdigest()[:12]
     _anexar("%s  #%s  tentando   %-9s %-16s %s" % (
         time.strftime("%Y-%m-%dT%H:%M:%S"), ident, acao, anuncio, nota))
     return ident
 
 
-def fechar_tentativa(ident, resultado, nota=""):
+def fechar_tentativa(ident, resultado, nota="", ja_enviou=True):
     _anexar("%s  #%s  %-10s %s" % (
-        time.strftime("%Y-%m-%dT%H:%M:%S"), ident, resultado, nota))
+        time.strftime("%Y-%m-%dT%H:%M:%S"), ident, resultado, _sem_segredo(nota)),
+        ja_enviou=ja_enviou)
 
 
 def anotar(texto):
@@ -237,25 +252,37 @@ def anotar(texto):
     _anexar("%s  %s" % (" " * 19, texto))
 
 
+def _arquivos_de_recibo():
+    return sorted(RECIBO.parent.glob(RECIBO.stem + "*" + RECIBO.suffix))
+
+
 def pendencias(anuncio=None):
     """Tentativas sem resultado conhecido. Linha aberta tranca o anuncio.
 
     Interrupcao no meio — terminal fechado, luz caindo, disco cheio — nao fica
-    invisivel: fica trancada, e o destravamento e por leitura."""
-    if not RECIBO.exists():
-        return []
+    invisivel: fica trancada, e o destravamento e por leitura.
+
+    Le o CONJUNTO de recibos, nao so o arquivo atual: renomear acoes.txt para
+    acoes-2026.txt nao pode fazer uma pendencia desaparecer da consulta — seria
+    destravar um anuncio incerto arrumando a pasta.
+
+    Recibo ilegivel RECUSA. Devolver lista vazia aqui transformaria "nao sei" em
+    "nao tem nada pendente", que e a pior leitura possivel."""
     abertas = {}
-    try:
-        linhas = RECIBO.read_text(encoding="utf-8").splitlines()
-    except OSError:
-        return []
+    linhas = []
+    for caminho in _arquivos_de_recibo():
+        try:
+            linhas.extend(caminho.read_text(encoding="utf-8").splitlines())
+        except OSError as e:
+            raise ReciboIlegivel(
+                "Nao deu para ler o recibo %s (%s). Sem poder ler, nao sei se "
+                "existe acao pendente — e nao vou agir no escuro."
+                % (caminho.name, e.__class__.__name__))
     for linha in linhas:
         partes = linha.split()
         if len(partes) < 3 or not partes[1].startswith("#"):
             continue
         ident, estado = partes[1][1:], partes[2]
-        if estado == "tendando":  # nunca acontece; mantem o parser previsivel
-            continue
         if estado == "tentando":
             abertas[ident] = {"id": ident, "acao": partes[3] if len(partes) > 3 else "",
                               "anuncio": partes[4] if len(partes) > 4 else "",
@@ -282,6 +309,39 @@ def exigir_item_livre(anuncio):
 
 # ---------------------------------------------------------------- intencao
 
+@contextlib.contextmanager
+def trava(alvo):
+    """Exclusao mutua ENTRE PROCESSOS para um anuncio ou pergunta.
+
+    Ler-alterar-gravar um arquivo nao e atomico so porque a substituicao e: dois
+    terminais podiam consumir o mesmo codigo, reler o mesmo estado e enviar duas
+    escritas. Esta trava cobre consumir + reler + abrir a tentativa."""
+    nome = re.sub(r"[^A-Za-z0-9_.-]", "_", str(alvo))[:60]
+    caminho = RECIBO.parent / (".em-andamento-%s" % nome)
+    try:
+        fd = os.open(str(caminho), os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
+    except FileExistsError:
+        raise ItemTrancado(
+            "Ja existe uma execucao em andamento para %s nesta pasta.\n"
+            "Espere ela terminar. Se voce tem certeza de que nao ha nenhuma "
+            "(terminal fechado no meio), apague o arquivo:\n  %s" % (alvo, caminho))
+    except OSError as e:
+        raise ReciboImpossivel(
+            "Nao deu para criar a trava de execucao em %s (%s). Sem trava, duas "
+            "execucoes podem enviar duas vezes: nao envio."
+            % (caminho.parent, e.__class__.__name__))
+    try:
+        os.write(fd, ("%d %s\n" % (os.getpid(),
+                                   time.strftime("%Y-%m-%dT%H:%M:%S"))).encode())
+        os.close(fd)
+        yield
+    finally:
+        try:
+            os.unlink(str(caminho))
+        except OSError:
+            pass
+
+
 def _ler_intencoes():
     if not INTENCOES.exists():
         return {}
@@ -290,7 +350,16 @@ def _ler_intencoes():
     except (OSError, ValueError):
         return {}
     agora = time.time()
-    return {k: v for k, v in dados.items() if v.get("vence_em", 0) > agora}
+    vivas = {k: v for k, v in dados.items() if v.get("vence_em", 0) > agora}
+    if len(vivas) != len(dados):
+        # Vencida tem de SAIR DO DISCO, nao so ser ignorada na leitura: a
+        # intencao de responder carrega o rascunho da resposta, e "expira" que
+        # nao apaga nada e so uma filtragem com nome bonito.
+        try:
+            _gravar_intencoes(vivas)
+        except OSError:
+            pass
+    return vivas
 
 
 def _gravar_intencoes(dados):
@@ -298,12 +367,25 @@ def _gravar_intencoes(dados):
         INTENCOES, json.dumps(dados, indent=2, ensure_ascii=False) + "\n")
 
 
+def _mesmo_alvo(a, b):
+    return (a.get("conta") == b.get("conta")
+            and a.get("acao") == b.get("acao")
+            and a.get("anuncio") == b.get("anuncio")
+            and a.get("campanha") == b.get("campanha")
+            and a.get("pergunta") == b.get("pergunta"))
+
+
 def guardar_intencao(dados):
     """Guarda o que a pessoa acabou de conferir e devolve o codigo.
 
     O codigo nao prova que o mundo nao mudou — prova que a pessoa leu AQUILO.
-    Quem prova que aquilo ainda e verdade e a releitura, em `--fazer`."""
-    atuais = _ler_intencoes()
+    Quem prova que aquilo ainda e verdade e a releitura, em `--fazer`.
+
+    Conferir de novo REVOGA a conferencia anterior do mesmo alvo. Sem isso, quem
+    corrigisse o texto de uma resposta ficaria com dois codigos validos por dez
+    minutos — e o antigo publicaria justamente o texto descartado."""
+    atuais = {k: v for k, v in _ler_intencoes().items()
+              if not _mesmo_alvo(v, dados)}
     for _ in range(20):
         codigo = hashlib.sha256(
             (json.dumps(dados, sort_keys=True, ensure_ascii=False)
@@ -338,11 +420,28 @@ def consumir_intencao(codigo):
 
 # -------------------------------------------------------------------- envio
 
-def _limpar(texto, token):
-    """Mensagem de erro nunca carrega credencial, nem quando o servidor devolve
-    a nossa propria chamada no corpo do erro."""
-    if token and texto:
-        texto = texto.replace(token, "***")
+def _sem_segredo(texto):
+    """Tira do texto qualquer credencial da pasta, sem precisar saber qual veio.
+
+    Limpa ANTES de truncar: cortar primeiro pode deixar meio token na mensagem,
+    e meio token ainda e informacao que nao deveria sair daqui."""
+    if not texto:
+        return texto
+    texto = str(texto)
+    sujos = []
+    try:
+        t = _tokens()
+        sujos = [t.get("access_token"), t.get("refresh_token")]
+    except Exception:
+        pass
+    try:
+        cfg = meli.carregar_env()
+        sujos += [cfg.get("MELI_CLIENT_SECRET"), cfg.get("MELI_APP_ID")]
+    except Exception:
+        pass
+    for s in sujos:
+        if s and len(str(s)) >= 8:
+            texto = texto.replace(str(s), "***")
     return texto
 
 
@@ -357,14 +456,22 @@ def _codigo_do_erro(corpo):
     return corpo.get("error")
 
 
-def _erro_da_resposta(status, bruto, token):
+# Codigo de erro e identificador, nao texto livre: o Meli manda coisas como
+# NOT_BUY_BOX_WINNER. Qualquer coisa fora desse formato nao e codigo — e pode
+# ser a nossa propria chamada voltando no corpo do erro.
+_FORMATO_CODIGO = re.compile(r"^[A-Za-z0-9_.:-]{1,80}$")
+
+
+def _erro_da_resposta(status, bruto):
     try:
         corpo = json.loads(bruto) if bruto.strip() else {}
     except ValueError:
         corpo = {}
     codigo = _codigo_do_erro(corpo)
+    if codigo is not None and not _FORMATO_CODIGO.match(str(codigo)):
+        codigo = None
     mensagem = corpo.get("message") if isinstance(corpo, dict) else None
-    detalhe = _limpar(str(mensagem or bruto)[:300], token)
+    detalhe = _sem_segredo(str(mensagem or bruto))[:300]
 
     if codigo == ERRO_CORRIDA:
         return OfertaEmProcesso(
@@ -443,18 +550,28 @@ def enviar(acao, caminho, params=None, corpo=None, anuncio=None):
     except urllib.error.HTTPError as e:
         bruto = e.read().decode("utf-8", "replace")
         e.close()
-        erro = _erro_da_resposta(e.code, bruto, token)
-        fechar_tentativa(ident, "recusado" if isinstance(erro, SemPermissao) else "erro",
-                         "%s %s" % (e.code, getattr(erro, "codigo", "") or ""))
+        if e.code >= 500:
+            # O servidor recebeu e quebrou. Isso NAO prova que nao aplicou, e
+            # resultado sem prova de nao-aplicacao continua incerto: a linha
+            # fica aberta e o item trancado.
+            raise RespostaIncerta(
+                "O Mercado Livre respondeu erro %s (do lado dele). A chamada "
+                "chegou, entao PODE ter sido aplicada.\n"
+                "Nao vou repetir. Confira o estado real e reconcilie: "
+                "python3 promover.py reconciliar %s" % (e.code, etiqueta))
+        erro = _erro_da_resposta(e.code, bruto)
+        fechar_tentativa(
+            ident, "recusado" if isinstance(erro, SemPermissao) else "erro",
+            "%s %s" % (e.code, getattr(erro, "codigo", "") or ""))
         raise erro
     except seguro.RedirecionamentoRecusado:
-        # O token NAO foi reenviado. A tentativa fecha como erro, e nao como
-        # incerta, porque a chamada nao chegou ao destino verdadeiro.
+        # O token NAO foi reenviado e a chamada nao chegou ao destino verdadeiro:
+        # aqui da para fechar com certeza.
         fechar_tentativa(ident, "erro", "redirecionamento recusado")
         raise
     except Exception as e:
         # Resposta perdida: pode ter aplicado. A linha fica ABERTA de proposito —
-        # e ela que tranca o anuncio ate alguem reconciliar por leitura.
+        # e ela que tranca o item ate alguem reconciliar por leitura.
         raise RespostaIncerta(
             "A resposta se perdeu (%s). A acao PODE ter sido aplicada.\n"
             "Nao vou repetir: repetir as cegas e o jeito de aplicar duas vezes.\n"
@@ -473,8 +590,16 @@ def enviar(acao, caminho, params=None, corpo=None, anuncio=None):
         raise ErroNaEscrita(
             "O Mercado Livre respondeu sucesso no transporte, mas com falhas no "
             "corpo. Nao conte como feito: confira o estado real.")
-    fechar_tentativa(ident, "ok", "enviado")
-    return {"resposta": resposta, "recibo": ident}
+    # De proposito NAO fecha a tentativa aqui. Transporte aceito nao e resultado
+    # confirmado, e fechar agora destravaria o item durante a propagacao — a
+    # janela em que o 201 ja mentiu tres vezes nesta casa. Quem fecha e quem
+    # confirma, chamando confirmado(). Enquanto nao fechar, o item fica trancado.
+    return {"resposta": resposta, "recibo": ident, "etiqueta": etiqueta}
+
+
+def confirmado(ident, nota):
+    """Fecha a tentativa DEPOIS de a releitura provar o resultado."""
+    fechar_tentativa(ident, "ok", nota)
 
 
 # --------------------------------------------------------------------- CLI

@@ -141,6 +141,9 @@ def conferir(acao, mlb, campanha):
 
     valores = {
         "preco_hoje": r["praticado"],
+        # Referencia da campanha: e o unico numero que diz a que preco o anuncio
+        # deveria voltar quando ele sai. Sem isso, "saiu" nao da para conferir.
+        "preco_de_referencia": _num(cand.get("original_price")),
         "preco_na_campanha": proposto if acao == "aderir" else None,
         "meli_banca_pct": _num(cand.get("meli_percentage")),
         "voce_banca_pct": _num(cand.get("seller_percentage")),
@@ -259,15 +262,49 @@ def _confirmar(intencao, cand_antes):
         # ambiguo nao vira "deu certo".
         return False, ("o anuncio desapareceu da lista da campanha; nao sei "
                        "dizer se saiu. Preco praticado %s" % _dinheiro(r["praticado"]))
-    if estado in FORA:
-        return True, "fora da campanha, preco %s" % _dinheiro(r["praticado"])
-    return False, "estado %r (esperava candidato de novo), preco %s" % (
-        estado, _dinheiro(r["praticado"]))
+    oferta = cand.get("ref_id") or cand.get("offer_id")
+    if estado != "candidate":
+        # `pending` nao e saida: e o meio do caminho. Contar como saida diria
+        # "pronto, voltou" para quem ainda esta vendendo com desconto.
+        return False, "estado %r (esperava candidato de novo), preco %s" % (
+            estado, _dinheiro(r["praticado"]))
+    if intencao.get("oferta") and oferta != intencao["oferta"]:
+        return False, ("ele esta candidato, mas numa oferta diferente da que eu "
+                       "tirei (%s). Confira no painel." % oferta)
+    referencia = intencao["valores"].get("preco_de_referencia")
+    if referencia is not None and r["praticado"] == referencia:
+        return True, "fora da campanha, preco de volta a %s" % _dinheiro(referencia)
+    # Saiu da campanha mas o preco nao bateu com a referencia: o estado esta
+    # certo e o dinheiro nao esta provado. Nao afirmar os dois.
+    return False, ("saiu da campanha, mas o preco praticado e %s e eu esperava "
+                   "%s. O estado voltou; o preco eu nao confirmo."
+                   % (_dinheiro(r["praticado"]),
+                      _dinheiro(referencia) if referencia is not None
+                      else "o anterior, que a API nao me deu"))
 
 
-def fazer(codigo):
+def fazer(codigo, acao_pedida=None, mlb_pedido=None, campanha_pedida=None):
+    """Executa a conferencia guardada — e so ela.
+
+    O codigo e amarrado a um alvo. Se a linha de comando pedir outro, recusa: a
+    frase que a pessoa aprovou na tela descrevia uma operacao, e seria essa que
+    ela pensa estar autorizando."""
+    alvo = mlb_pedido or codigo
+    with escrever.trava(alvo):
+        return _fazer(codigo, acao_pedida, mlb_pedido, campanha_pedida)
+
+
+def _fazer(codigo, acao_pedida, mlb_pedido, campanha_pedida):
     intencao = escrever.consumir_intencao(codigo)
     acao, mlb = intencao["acao"], intencao["anuncio"]
+    for nome, pedido, guardado in (("acao", acao_pedida, acao),
+                                   ("anuncio", mlb_pedido, mlb),
+                                   ("campanha", campanha_pedida, intencao["campanha"])):
+        if pedido is not None and pedido != guardado:
+            raise NaoDaParaFazer(
+                "Este codigo foi conferido para %s %r, e o comando pediu %r. "
+                "Nao executo uma operacao diferente da que apareceu na tela."
+                % (nome, guardado, pedido))
     cand, _ = _conferir_de_novo(intencao)
 
     caminho = "/seller-promotions/items/" + mlb
@@ -288,7 +325,7 @@ def fazer(codigo):
         chamar = lambda: escrever.enviar("sair", caminho, params=params, anuncio=mlb)
 
     try:
-        chamar()
+        envio = chamar()
     except escrever.OfertaEmProcesso:
         # OfertaEmProcesso E uma ErroNaEscrita, entao esta clausula tem de vir
         # ANTES da de baixo — senao a mais geral engole a mais especifica e a
@@ -301,7 +338,7 @@ def fazer(codigo):
               "20 segundos e tentando mais uma vez, uma so.")
         escrever.esperar(20)
         _conferir_de_novo(intencao)
-        chamar()
+        envio = chamar()
     except escrever.ErroNaEscrita as e:
         # 404 na saida nao e sucesso ("ja nao estava la") nem fracasso: e
         # resultado a reconciliar. Quem decide e a releitura, logo abaixo.
@@ -310,9 +347,13 @@ def fazer(codigo):
         print("O Mercado Livre respondeu 404 na saida. Isso costuma significar "
               "que ele ja nao estava na campanha — mas quem decide e a "
               "leitura, nao o codigo de resposta.")
+        envio = None
 
     ok, detalhe = _confirmar(intencao, cand)
     if ok:
+        # So agora a tentativa fecha. Enquanto nao fecha, o anuncio esta trancado.
+        if envio:
+            escrever.confirmado(envio["recibo"], detalhe)
         print("\nFeito e CONFERIDO: %s" % detalhe)
         if acao == "aderir":
             escrever.anotar("compensar: python3 promover.py sair %s %s"
@@ -329,6 +370,11 @@ def fazer(codigo):
 
 def reconciliar(mlb):
     """Fecha acao sem resposta conhecida, pelo estado vivo — nunca por palpite."""
+    with escrever.trava("reconciliar-" + mlb):
+        return _reconciliar(mlb)
+
+
+def _reconciliar(mlb):
     presas = escrever.pendencias(mlb)
     praticado, situacao = preco_vivo(mlb)
     print("Anuncio   %s (%s)" % (mlb, situacao or "situacao desconhecida"))
@@ -387,7 +433,7 @@ def _main(argv=None):
         return _erro("isso parece uma lista de anuncios. Uma acao por anuncio.")
 
     if fazer_codigo:
-        return fazer(fazer_codigo)
+        return fazer(fazer_codigo, acao, mlb, campanha)
     conferir(acao, mlb, campanha)
     return 0
 
@@ -402,8 +448,9 @@ if __name__ == "__main__":
         sys.exit(_main())
     except (NaoDaParaFazer, escrever.SemPermissao, escrever.ConferenciaInvalida,
             escrever.ItemTrancado, escrever.ReciboImpossivel,
-            escrever.ReciboNoTeto, escrever.RespostaIncerta,
-            escrever.ErroNaEscrita, escrever.AcaoRecusada) as e:
+            escrever.ReciboIlegivel, escrever.ReciboNoTeto,
+            escrever.RespostaIncerta, escrever.ErroNaEscrita,
+            escrever.AcaoRecusada) as e:
         sys.exit("PARADO: %s" % e)
     except (meli.SemAutorizacao, meli.CredenciaisIncompletas, meli.ErroDaAPI) as e:
         sys.exit("PARADO: %s" % e)

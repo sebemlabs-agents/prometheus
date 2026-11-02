@@ -105,27 +105,52 @@ def conferir(ident, texto):
     print("ATENCAO   publicar NAO se desfaz. Nao existe apagar resposta.")
     print("")
     print("Nada foi publicado. Para publicar, dentro de 10 minutos:")
-    print("  python3 responder.py --fazer %s" % codigo)
+    print("  python3 responder.py %s --fazer %s" % (p.get("id"), codigo))
     return codigo
 
 
+def _igual(a, b):
+    """Mesmo texto, desconsiderando espaco. Normalizacao demonstrada e so essa."""
+    return " ".join((a or "").split()) == " ".join((b or "").split())
+
+
 def _confirmar(intencao):
-    """Quem confirma e a releitura, nunca o codigo de resposta."""
+    """Quem confirma e a releitura, nunca o codigo de resposta.
+
+    E confirma o TEXTO: achar "alguma resposta publicada" nao prova que foi a
+    sua. Outra integracao pode ter respondido na mesma janela, e dizer "feito"
+    ali seria assinar o texto de outro."""
     escrever.esperar(escrever.ESPERA_PROPAGACAO)
     p = uma(intencao["pergunta"])
     resposta = (p or {}).get("answer") if isinstance(p, dict) else None
     publicado = (resposta or {}).get("text") if isinstance(resposta, dict) else None
-    if publicado:
-        return True, publicado
-    return False, None
+    if not publicado:
+        return False, None, "ainda aparece sem resposta"
+    if _igual(publicado, intencao["texto"]):
+        return True, publicado, ""
+    return False, publicado, ("ha uma resposta publicada que NAO e a sua "
+                              "(%d caracteres, a sua tinha %d). Pode ter sido "
+                              "outra integracao, ou outra pessoa"
+                              % (len(publicado), len(intencao["texto"])))
 
 
-def fazer(codigo):
+def fazer(codigo, pergunta_pedida=None):
+    alvo = "pergunta-%s" % (pergunta_pedida or codigo)
+    with escrever.trava(alvo):
+        return _fazer(codigo, pergunta_pedida)
+
+
+def _fazer(codigo, pergunta_pedida):
     intencao = escrever.consumir_intencao(codigo)
     if intencao.get("acao") != "responder":
         raise escrever.ConferenciaInvalida(
             "Este codigo e de outra acao. Confira de novo.")
     ident = intencao["pergunta"]
+    if pergunta_pedida is not None and str(pergunta_pedida) != str(ident):
+        raise NaoDaParaResponder(
+            "Este codigo foi conferido para a pergunta %s, e o comando pediu "
+            "%s. Nao publico numa pergunta diferente da que apareceu na tela."
+            % (ident, pergunta_pedida))
 
     # Reler antes de publicar: pode ter sido respondida, posta em espera ou
     # apagada entre a conferencia e agora.
@@ -134,19 +159,17 @@ def fazer(codigo):
         raise NaoDaParaResponder(
             "Entre a conferencia e agora, %s. Nao publiquei nada." % motivo)
 
-    escrever.enviar("responder", "/answers",
-                    corpo={"question_id": ident, "text": intencao["texto"]},
-                    anuncio="pergunta-%s" % ident)
+    envio = escrever.enviar(
+        "responder", "/answers",
+        corpo={"question_id": ident, "text": intencao["texto"]},
+        anuncio="pergunta-%s" % ident)
 
-    ok, publicado = _confirmar(intencao)
+    ok, publicado, porque = _confirmar(intencao)
     if ok:
+        escrever.confirmado(envio["recibo"], "resposta publicada e conferida")
         print("\nPublicado e CONFERIDO.")
-        if publicado.strip() != intencao["texto"].strip():
-            # Nao e falha: e informacao. O Meli pode normalizar o texto.
-            print("O texto que esta no ar tem %d caracteres; o enviado tinha %d."
-                  % (len(publicado), len(intencao["texto"])))
         return 0
-    print("\nENVIADO, MAS NAO CONFIRMEI: a pergunta ainda aparece sem resposta.")
+    print("\nENVIADO, MAS NAO CONFIRMEI: %s." % porque)
     print("NAO reenvie: reenviar as cegas publica duas respostas na mesma "
           "pagina. Confira o estado real:")
     print("  python3 responder.py reconciliar %s" % ident)
@@ -154,6 +177,11 @@ def fazer(codigo):
 
 
 def reconciliar(ident):
+    with escrever.trava("reconciliar-pergunta-%s" % ident):
+        return _reconciliar(ident)
+
+
+def _reconciliar(ident):
     presas = escrever.pendencias("pergunta-%s" % ident)
     p = uma(ident)
     resposta = (p or {}).get("answer") if isinstance(p, dict) else None
@@ -198,10 +226,19 @@ def _main(argv=None):
         if len(a) != 2:
             return _erro("reconciliar leva um numero de pergunta so.")
         return reconciliar(a[1])
-    if a[0] == "--fazer":
-        if len(a) != 2:
+    codigo = None
+    if "--fazer" in a:
+        i = a.index("--fazer")
+        if i + 1 >= len(a):
             return _erro("--fazer precisa do codigo que a conferencia mostrou.")
-        return fazer(a[1])
+        codigo = a[i + 1]
+        del a[i:i + 2]
+    if codigo and len(a) == 1:
+        # O numero da pergunta vem junto de proposito: o codigo sozinho nao
+        # deixa voce ver, na propria linha, em qual pergunta vai publicar.
+        return fazer(codigo, a[0])
+    if codigo:
+        return _erro("para publicar: python3 responder.py <numero> --fazer <codigo>")
 
     texto = None
     if "--texto" in a:
@@ -226,9 +263,9 @@ if __name__ == "__main__":
         sys.exit(_main())
     except (NaoDaParaResponder, escrever.SemPermissao,
             escrever.ConferenciaInvalida, escrever.ItemTrancado,
-            escrever.ReciboImpossivel, escrever.ReciboNoTeto,
-            escrever.RespostaIncerta, escrever.ErroNaEscrita,
-            escrever.AcaoRecusada) as e:
+            escrever.ReciboImpossivel, escrever.ReciboIlegivel,
+            escrever.ReciboNoTeto, escrever.RespostaIncerta,
+            escrever.ErroNaEscrita, escrever.AcaoRecusada) as e:
         sys.exit("PARADO: %s" % e)
     except (meli.SemAutorizacao, meli.CredenciaisIncompletas, meli.ErroDaAPI) as e:
         sys.exit("PARADO: %s" % e)
