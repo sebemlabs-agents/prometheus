@@ -184,7 +184,10 @@ def exigir_permissao(acao):
 
 # ------------------------------------------------------------------- recibo
 
-_RESULTADOS = ("ok", "erro", "recusado")
+# "reconciliado" e diferente de "ok" de proposito: ok e resultado conferido pela
+# pos-condicao da acao; reconciliado e o que a leitura encontrou depois. Dar o
+# mesmo nome aos dois fazia o recibo afirmar mais do que foi provado.
+_RESULTADOS = ("ok", "erro", "recusado", "reconciliado")
 
 
 def _tamanho_do_conjunto():
@@ -269,6 +272,7 @@ def pendencias(anuncio=None):
     Recibo ilegivel RECUSA. Devolver lista vazia aqui transformaria "nao sei" em
     "nao tem nada pendente", que e a pior leitura possivel."""
     abertas = {}
+    fechadas = set()
     linhas = []
     for caminho in _arquivos_de_recibo():
         try:
@@ -283,13 +287,18 @@ def pendencias(anuncio=None):
         if len(partes) < 3 or not partes[1].startswith("#"):
             continue
         ident, estado = partes[1][1:], partes[2]
+        # Junta ABERTURAS e FECHAMENTOS em conjuntos e so no fim subtrai. Casar
+        # na ordem de leitura parecia natural e tinha um buraco: com o recibo
+        # arquivado, o fechamento pode estar em acoes.txt e a abertura em
+        # acoes-z.txt — lido depois. A pendencia ressuscitava, e um anuncio
+        # resolvido voltava trancado.
         if estado == "tentando":
             abertas[ident] = {"id": ident, "acao": partes[3] if len(partes) > 3 else "",
                               "anuncio": partes[4] if len(partes) > 4 else "",
                               "quando": partes[0]}
         elif estado in _RESULTADOS:
-            abertas.pop(ident, None)
-    todas = list(abertas.values())
+            fechadas.add(ident)
+    todas = [v for k, v in abertas.items() if k not in fechadas]
     if anuncio is None:
         return todas
     return [p for p in todas if p["anuncio"] == anuncio]
@@ -342,6 +351,17 @@ def trava(alvo):
             pass
 
 
+@contextlib.contextmanager
+def trava_das_intencoes():
+    """O arquivo de intencoes e UM para a pasta inteira.
+
+    Travar por item nao protege ele: dois processos em anuncios diferentes
+    liam {A,B}, cada um consumia o seu e gravava — o segundo a gravar
+    ressuscitava o codigo que o primeiro tinha queimado."""
+    with trava("intencoes"):
+        yield
+
+
 def _ler_intencoes():
     if not INTENCOES.exists():
         return {}
@@ -357,8 +377,12 @@ def _ler_intencoes():
         # nao apaga nada e so uma filtragem com nome bonito.
         try:
             _gravar_intencoes(vivas)
-        except OSError:
-            pass
+        except OSError as e:
+            # Silenciar isso faria o rascunho ficar no disco contrariando o que
+            # a skill promete. Avisar e o minimo honesto.
+            print("AVISO: nao deu para apagar conferencia vencida de %s (%s). "
+                  "O rascunho continua no arquivo. Rode: python3 escrever.py limpar"
+                  % (INTENCOES.name, e.__class__.__name__), file=sys.stderr)
     return vivas
 
 
@@ -376,6 +400,11 @@ def _mesmo_alvo(a, b):
 
 
 def guardar_intencao(dados):
+    with trava_das_intencoes():
+        return _guardar_intencao(dados)
+
+
+def _guardar_intencao(dados):
     """Guarda o que a pessoa acabou de conferir e devolve o codigo.
 
     O codigo nao prova que o mundo nao mudou — prova que a pessoa leu AQUILO.
@@ -402,6 +431,11 @@ def guardar_intencao(dados):
 
 
 def consumir_intencao(codigo):
+    with trava_das_intencoes():
+        return _consumir_intencao(codigo)
+
+
+def _consumir_intencao(codigo):
     """Le, confere e QUEIMA o codigo. Vale uma vez, 10 minutos, naquela conta."""
     atuais = _ler_intencoes()
     registro = atuais.pop((codigo or "").strip().upper(), None)
@@ -469,6 +503,11 @@ def _erro_da_resposta(status, bruto):
         corpo = {}
     codigo = _codigo_do_erro(corpo)
     if codigo is not None and not _FORMATO_CODIGO.match(str(codigo)):
+        codigo = None
+    if codigo is not None and _sem_segredo(str(codigo)) != str(codigo):
+        # O "codigo" trazia uma credencial da pasta. Entao nao e codigo: e a
+        # nossa propria chamada voltando no corpo do erro. O formato sozinho nao
+        # distingue — NOT_BUY_BOX_WINNER e um token se parecem o bastante.
         codigo = None
     mensagem = corpo.get("message") if isinstance(corpo, dict) else None
     detalhe = _sem_segredo(str(mensagem or bruto))[:300]
@@ -619,8 +658,14 @@ def _main():
         for p in presas:
             print("  %s  %s  %s" % (p["quando"], p["acao"], p["anuncio"]))
         return 0
+    if len(sys.argv) > 1 and sys.argv[1] == "limpar":
+        with trava_das_intencoes():
+            antes = len(_ler_intencoes())
+        print("Conferencias ainda validas: %d. As vencidas foram apagadas." % antes)
+        return 0
     print(__doc__.strip().splitlines()[0])
     print("\nUso:  python3 escrever.py permissao")
+    print("      python3 escrever.py limpar      (apaga conferencia vencida)")
     return 0
 
 

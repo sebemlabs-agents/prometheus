@@ -177,7 +177,9 @@ def _fazer(codigo, pergunta_pedida):
 
 
 def reconciliar(ident):
-    with escrever.trava("reconciliar-pergunta-%s" % ident):
+    # A MESMA trava da execucao: travas diferentes deixavam a reconciliacao
+    # fechar uma tentativa ainda em propagacao.
+    with escrever.trava("pergunta-%s" % ident):
         return _reconciliar(ident)
 
 
@@ -189,14 +191,30 @@ def _reconciliar(ident):
     print("Pergunta  %s" % ident)
     print("Estado    %s" % ((p or {}).get("status") or "nao sei"))
     print("Resposta  %s" % ("JA publicada" if tem else "ainda nao publicada"))
+    if tem:
+        print("Texto     %s" % " ".join(
+            ((resposta or {}).get("text") or "").split())[:200])
     if not presas:
         print("\nNao havia acao pendente para esta pergunta.")
         return 0
+    if not isinstance(p, dict) or not p:
+        print("\nNao consegui ler a pergunta. A acao pendente continua aberta "
+              "de proposito. Tente de novo em instantes.")
+        return 1
     for x in presas:
         escrever.fechar_tentativa(
-            x["id"], "ok", "reconciliado pela leitura: resposta %s"
-            % ("publicada" if tem else "nao publicada"))
-    print("\n%d acao(oes) pendente(s) fechada(s) pela leitura." % len(presas))
+            x["id"], "reconciliado",
+            "a leitura encontrou: resposta %s" % ("publicada" if tem else "nao publicada"))
+    if tem:
+        # Nao da para afirmar que a resposta publicada e a sua: a intencao, que
+        # guardava o texto, foi consumida no envio. Dizer "feito" aqui seria
+        # assinar um texto que pode ser de outra integracao.
+        print("\nHa uma resposta publicada nesta pergunta. NAO consigo afirmar "
+              "que e a sua — leia acima e confira na pagina do anuncio.")
+    else:
+        print("\nNao ha resposta publicada: a sua nao saiu.")
+    print("%d acao(oes) pendente(s) fechada(s) pelo que a leitura encontrou."
+          % len(presas))
     return 0
 
 
