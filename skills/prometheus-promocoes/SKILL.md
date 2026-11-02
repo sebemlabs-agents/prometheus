@@ -6,11 +6,40 @@ description: Monta a fila diária de decisão sobre promoções do Mercado Livre
 # Promoções terminando — pacote Elo
 
 Entra a conta conectada, sai **a fila do que decidir hoje**: campanhas terminando, quantos
-anúncios cada uma pega, o desconto mínimo, e o que ele já aderiu.
+anúncios estão elegíveis, quantos já estão dentro, quanto do desconto o Mercado Livre banca,
+e o desconto mínimo quando a campanha publica um.
 
 Esta skill **não adere a promoção, não muda preço e não altera anúncio**. Ela mostra; quem
 decide é o vendedor, no painel do Mercado Livre. Se ele pedir para aderir, explique isso e,
 se ajudar, entregue a lista pronta para ele levar.
+
+## Elegível e aderido não são a mesma coisa — e confundir é o erro caro
+
+O Mercado Livre lista como **elegível** o anúncio que *pode* entrar na campanha, e como
+**aderido** o que *já está dentro*. Somar os dois e dizer "38 anúncios na promoção" faz o
+vendedor achar que aderiu quando não aderiu — e a campanha termina com ele de fora.
+
+O painel mostra os dois separados, sempre. **Quando falar com o usuário, use as duas
+palavras.** "Trinta e oito elegíveis, nenhum dentro, termina hoje" é uma frase que faz ele
+agir; "38 anúncios" não é.
+
+## Quanto do desconto o Mercado Livre banca
+
+Cada campanha traz a mediana de **quanto o Meli subsidia** e **quanto sai do bolso do
+vendedor**. É o que decide se vale aderir: campanha com rebate alto protege margem e ainda
+dá exposição.
+
+Mediana, não média, de propósito: um anúncio com desconto fora da curva não desloca o número.
+
+**O que o pacote não sabe, e não vai fingir que sabe:** se o desconto cabe na margem dele. A
+API não tem o custo por SKU. Se ele pedir essa conta, peça o custo — da Olist ou da planilha —
+e faça o cruzamento na conversa, dizendo de onde veio cada número.
+
+## Campanha grande demais vem vazia, não truncada
+
+Quando uma campanha passa do teto de páginas, as contagens dela vêm **vazias com a
+explicação**, nunca com um número parcial. Contagem pela metade apresentada como total é pior
+que contagem nenhuma: quem lê "1000 anúncios" decide achando que sabe.
 
 ## Por que isto existe
 
