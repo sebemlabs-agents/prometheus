@@ -1023,3 +1023,70 @@ def test_promover_saida_em_outra_oferta_nao_e_confirmada(conta_api, capsys):
     conta_api["efeito"] = outra
     assert promover.fazer(cod) == 1
     assert "oferta diferente" in capsys.readouterr().out
+
+
+# ================= o que a verificacao da lente pegou (02/11, rodada 3)
+
+def test_fechamento_em_arquivo_arquivado_nao_ressuscita_pendencia(pasta):
+    """A regressao que a correcao anterior criou: casar abertura e fechamento na
+    ordem dos arquivos fazia um item resolvido voltar trancado."""
+    ident = escrever.abrir_tentativa("aderir", "MLB123", "x")
+    (pasta / "acoes.txt").rename(pasta / "acoes-z.txt")      # a abertura foi para o fim
+    escrever.fechar_tentativa(ident, "reconciliado", "lido")  # o fechamento, para acoes.txt
+    assert not escrever.pendencias("MLB123")
+
+
+def test_o_arquivo_de_intencoes_tem_trava_propria(pasta):
+    """Travar por item nao protege um arquivo que e um so para a pasta."""
+    with escrever.trava("intencoes"):
+        with pytest.raises(escrever.ItemTrancado):
+            escrever.guardar_intencao({"conta": CONTA, "acao": "aderir",
+                                       "anuncio": "MLB1"})
+
+
+def test_reconciliar_usa_a_mesma_trava_da_execucao(conta_api):
+    """Travas diferentes deixavam a reconciliacao fechar tentativa em propagacao."""
+    with escrever.trava("MLB123"):
+        with pytest.raises(escrever.ItemTrancado):
+            promover.reconciliar("MLB123")
+
+
+def test_reconciliar_que_nao_consegue_ler_nao_fecha_nada(conta_api):
+    escrever.abrir_tentativa("aderir", "MLB123", "x")
+    conta_api["item"] = {}
+    assert promover.reconciliar("MLB123") == 1
+    assert escrever.pendencias("MLB123")
+
+
+def test_reconciliar_nao_grava_ok_no_recibo(conta_api, pasta):
+    """`ok` e resultado conferido pela pos-condicao. O que a leitura encontrou
+    depois e outra coisa, e o recibo nao pode dar o mesmo nome aos dois."""
+    escrever.abrir_tentativa("aderir", "MLB123", "x")
+    promover.reconciliar("MLB123")
+    linhas = [l for l in (pasta / "acoes.txt").read_text(encoding="utf-8").splitlines()
+              if "tentando" not in l]
+    assert any("reconciliado" in l for l in linhas)
+    assert not any(" ok " in l for l in linhas)
+
+
+def test_reconciliar_resposta_nao_afirma_que_e_a_sua(perguntas_api, capsys):
+    escrever.abrir_tentativa("responder", "pergunta-%s" % PERGUNTA["id"], "x")
+    perguntas_api["p"]["answer"] = {"text": "resposta de alguem"}
+    responder.reconciliar(PERGUNTA["id"])
+    saida = capsys.readouterr().out
+    assert "NAO consigo afirmar" in saida
+    assert not escrever.pendencias("pergunta-%s" % PERGUNTA["id"])
+
+
+def test_token_dentro_do_formato_de_codigo_e_descartado(pasta, monkeypatch):
+    """NOT_BUY_BOX_WINNER e um token se parecem o bastante: o formato sozinho
+    nao distingue, entao quem decide e a limpeza."""
+    monkeypatch.setattr(escrever.seguro, "abrir",
+                        lambda req, timeout=30: (_ for _ in ()).throw(
+                            _http(400, {"error": "TOKEN-SECRETO",
+                                        "message": "recusado"})))
+    with pytest.raises(escrever.ErroNaEscrita) as e:
+        escrever.enviar("aderir", "/seller-promotions/items/MLB123",
+                        corpo={"promotion_id": "P-1"}, anuncio="MLB123")
+    assert "TOKEN-SECRETO" not in str(e.value)
+    assert "TOKEN-SECRETO" not in (pasta / "acoes.txt").read_text(encoding="utf-8")

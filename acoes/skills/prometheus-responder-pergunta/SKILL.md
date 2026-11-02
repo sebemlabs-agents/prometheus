@@ -79,9 +79,14 @@ python3 responder.py reconciliar 13657433363
 
 - **o recibo (`acoes.txt`) guarda o número da pergunta e o tamanho da resposta** — nunca o texto
   do cliente nem o dele. Mesma regra dos leitores: texto de conversa se lê na conversa.
-- **o rascunho fica em `intencoes.json` por até 10 minutos**, só na pasta dele, e é apagado
-  quando vence ou quando ele confere de novo. Não some antes porque é esse arquivo que amarra o
-  código ao texto exato — é o que impede publicar uma versão que ele não leu.
+- **o rascunho fica em `intencoes.json`**, só na pasta dele. Ele vale 10 minutos e é apagado
+  quando ele confere de novo, quando ele publica, ou **na próxima vez que a ferramenta roda**
+  depois de vencer. Isso significa que, se ele fechar o terminal e não voltar, o texto fica no
+  arquivo até a próxima execução — e isso é a verdade, não "10 minutos e sumiu". Para apagar na
+  hora: `python3 escrever.py limpar`.
+
+  O rascunho não é guardado por conveniência: é ele que amarra o código ao **texto exato**, e é
+  o que impede publicar uma versão que ele não leu.
 
 Conferir de novo **revoga a conferência anterior**: se ele corrigir o texto, o código antigo
 para de funcionar na hora. Isso é de propósito — dois códigos válidos ao mesmo tempo

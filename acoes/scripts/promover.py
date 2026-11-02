@@ -370,7 +370,10 @@ def _fazer(codigo, acao_pedida, mlb_pedido, campanha_pedida):
 
 def reconciliar(mlb):
     """Fecha acao sem resposta conhecida, pelo estado vivo — nunca por palpite."""
-    with escrever.trava("reconciliar-" + mlb):
+    # A MESMA trava da execucao, nao uma propria: com travas diferentes, a
+    # reconciliacao podia rodar no meio de um envio e fechar uma tentativa que
+    # ainda estava propagando.
+    with escrever.trava(mlb):
         return _reconciliar(mlb)
 
 
@@ -390,12 +393,19 @@ def _reconciliar(mlb):
     if not presas:
         print("\nNao havia acao pendente para este anuncio.")
         return 0
+    if praticado is None and situacao is None:
+        # Leitura que nao deu certo nao fecha nada: seria trocar "nao sei" por
+        # "resolvido", que e exatamente o que a pendencia existe para impedir.
+        print("\nNao consegui ler o estado deste anuncio. A acao pendente "
+              "continua aberta de proposito. Tente de novo em instantes.")
+        return 1
     for p in presas:
         escrever.fechar_tentativa(
-            p["id"], "ok", "reconciliado pela leitura: preco %s, %s" % (
+            p["id"], "reconciliado", "a leitura encontrou: preco %s, %s" % (
                 _dinheiro(praticado),
                 "dentro de %d campanha(s)" % len(dentro) if dentro else "fora"))
-    print("\n%d acao(oes) pendente(s) fechada(s) pela leitura. O anuncio "
+    print("\n%d acao(oes) pendente(s) fechada(s) PELO QUE A LEITURA ENCONTROU "
+          "(acima), nao por eu saber se a chamada aplicou. O anuncio "
           "destravou." % len(presas))
     return 0
 
