@@ -105,6 +105,7 @@ deve?"*, *"atualiza o painel"*.
 | `prometheus-painel` | o painel local com os blocos das skills que você rodou |
 | `prometheus-pedidos` | quanto você vendeu, os últimos pedidos, e a comissão que veio em cada item |
 | `prometheus-promocoes` | a fila do que termina nos próximos dias, com anúncios dentro e desconto mínimo |
+| `prometheus-devolucoes` | as reclamações abertas, por causa e por etapa, e quais esperam a sua resposta |
 | `prometheus-planilha` | lê qualquer CSV ou XLSX seu e cruza com o painel — sem formato obrigatório |
 
 Mais skills entram pelo mesmo caminho: cada uma grava um arquivo no formato do
