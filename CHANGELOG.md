@@ -23,6 +23,31 @@
 > 4. anotar a mudança aqui embaixo
 > 5. publicar pelo Cypher Guard
 
+## 1.6.0 — 2 de novembro de 2026
+
+**Skill nova: `prometheus-anuncios`.** A pergunta que o painel do Mercado Livre não responde
+por anúncio: **de quem olhou, quantos compraram.**
+
+Lá a conversão é da conta inteira. Aqui é anúncio a anúncio — e é assim que aparece o anúncio
+que recebe muita visita e vende pouco. Quando um campeão de faturamento converte abaixo da
+mediana da própria loja, **o problema não é tráfego**: é preço, foto, título, frete ou
+reputação.
+
+**Ela olha só os que vendem, e diz quantos ficaram de fora.** Uma conta ativa tem milhares de
+anúncios e as visitas custam uma chamada por anúncio — varrer tudo não cabe numa coleta que
+você roda ao vivo. Então ela pega os que mais faturaram na janela, que são os que doem quando
+convertem mal. `--quantos` aumenta a lista.
+
+**A janela vem do arquivo de pedidos**, não é escolhida aqui — e o programa **recusa rodar**
+se esse arquivo for de outra conta, de demonstração, ou de um dia que não seja hoje. Dividir
+venda de um período por visita de outro dá um número que não significa nada.
+
+**Visita ausente não vira conversão zero.** Zero quer dizer que gente olhou e ninguém
+comprou; ausência quer dizer que não deu para saber.
+
+**O que ela não sabe:** se a venda é lucrativa. Conversão alta com margem negativa é pior que
+conversão baixa. Cruze com a planilha ou com a Olist antes de baixar preço.
+
 ## 1.5.0 — 2 de novembro de 2026
 
 **Skill nova: `prometheus-devolucoes`.** As reclamações abertas da sua conta — por causa, por
