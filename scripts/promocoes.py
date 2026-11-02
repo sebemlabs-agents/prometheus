@@ -27,7 +27,9 @@ import meli
 
 JANELA_PADRAO = 7
 MAX_PAGINAS = 20
-POR_PAGINA = 100
+# Medido contra conta real em 02/11/2026: este endereco aceita ate 50 por pagina.
+# Com 100 ele devolve 400, e a skill inteira parava sem dizer a causa.
+POR_PAGINA = 50
 FUSO = dt.timezone(dt.timedelta(hours=-3))
 
 # Escopo amplo: valem para o catalogo elegivel, entao a lista muda sozinha.
@@ -62,13 +64,31 @@ def _num(v):
 
 
 def itens_da_promocao(pid, tipo, buscar=True):
-    """Devolve (quantidade, aderidos, truncado). Sem varredura: (None, None, False)."""
+    """Devolve o retrato dos anuncios de uma promocao.
+
+    ELEGIVEL E DENTRO SAO COISAS DIFERENTES, e confundir os dois e o erro mais
+    caro aqui: o Mercado Livre lista como `candidate` o anuncio que PODE entrar,
+    e como `started` o que JA esta dentro. Somar os dois e dizer "anuncios na
+    promocao" faz o vendedor achar que aderiu quando nao aderiu.
+
+    Traz tambem quanto do desconto o Meli banca (`meli_percentage`) e quanto sai
+    do bolso do vendedor (`seller_percentage`) — e a informacao que decide se
+    vale aderir, porque promocao com rebate protege margem.
+
+    Truncado devolve None em tudo: contagem pela metade apresentada como total
+    e pior que contagem nenhuma.
+    """
     if not buscar:
-        return None, None, False
+        return {"elegiveis": None, "aderidos": None, "truncado": False,
+                "meli_banca": None, "voce_banca": None}
     base = "/seller-promotions/promotions/%s/items" % pid
+    # Medido contra conta real em 02/11/2026: este endereco aceita ate 50 por
+    # pagina. Com 100 ele devolve 400, e a skill inteira parava sem dizer a causa.
     params = {"app_version": "v2", "promotion_type": tipo, "limit": POR_PAGINA}
-    total = 0
+    elegiveis = 0
     aderidos = 0
+    meli_pct = []
+    seller_pct = []
     visto = None
     for _ in range(MAX_PAGINAS):
         p = dict(params)
@@ -77,15 +97,38 @@ def itens_da_promocao(pid, tipo, buscar=True):
         corpo = meli.request("GET", base, p)
         achados = corpo.get("results") or []
         if not achados:
-            break
+            # Pagina vazia e FIM, nao estouro de teto. Sair por `break` aqui fazia
+            # campanha sem anuncio ser contada como truncada, e o painel escondia
+            # um zero verdadeiro atras de uma lacuna.
+            return {"elegiveis": elegiveis, "aderidos": aderidos, "truncado": False,
+                    "meli_banca": _mediana(meli_pct), "voce_banca": _mediana(seller_pct)}
         for item in achados:
-            total += 1
             if (item.get("status") or "").lower() in ADERIDO:
                 aderidos += 1
+            else:
+                elegiveis += 1
+            m, s = _num(item.get("meli_percentage")), _num(item.get("seller_percentage"))
+            if m is not None:
+                meli_pct.append(m)
+            if s is not None:
+                seller_pct.append(s)
         visto = (corpo.get("paging") or {}).get("searchAfter")
         if not visto or len(achados) < POR_PAGINA:
-            return total, aderidos, False
-    return total, aderidos, True
+            return {"elegiveis": elegiveis, "aderidos": aderidos, "truncado": False,
+                    "meli_banca": _mediana(meli_pct), "voce_banca": _mediana(seller_pct)}
+    return {"elegiveis": None, "aderidos": None, "truncado": True,
+            "meli_banca": None, "voce_banca": None}
+
+
+def _mediana(valores):
+    """Mediana, nao media: um anuncio com desconto fora da curva nao desloca."""
+    if not valores:
+        return None
+    ordenados = sorted(valores)
+    meio = len(ordenados) // 2
+    if len(ordenados) % 2:
+        return round(ordenados[meio], 2)
+    return round((ordenados[meio - 1] + ordenados[meio]) / 2.0, 2)
 
 
 def coletar(janela=JANELA_PADRAO, rapido=False, hoje=None):
@@ -111,17 +154,18 @@ def coletar(janela=JANELA_PADRAO, rapido=False, hoje=None):
         if dias < 0 or dias > janela:
             continue
 
-        quantos, aderidos, cortou = itens_da_promocao(
-            p.get("id"), p.get("type"), buscar=not rapido)
-        truncou = truncou or cortou
+        r = itens_da_promocao(p.get("id"), p.get("type"), buscar=not rapido)
+        truncou = truncou or r["truncado"]
 
         itens.append({
             "promocao": p.get("name") or p.get("type") or "sem nome",
             "tipo": p.get("type"),
             "termina": fim.date().isoformat(),
             "dias_restantes": dias,
-            "anuncios_dentro": quantos,
-            "anuncios_aderidos": aderidos,
+            "anuncios_elegiveis": r["elegiveis"],
+            "anuncios_aderidos": r["aderidos"],
+            "meli_banca_pct": r["meli_banca"],
+            "voce_banca_pct": r["voce_banca"],
             "desconto_minimo": _num(p.get("fixed_percentage")),
             "escopo_amplo": (p.get("type") or "") in AMPLO,
         })
@@ -130,15 +174,25 @@ def coletar(janela=JANELA_PADRAO, rapido=False, hoje=None):
 
     faltando, lacunas, avisos = [], {}, []
 
-    if rapido or any(i["anuncios_dentro"] is None for i in itens):
-        faltando.append("anuncios_dentro")
-        lacunas["anuncios_dentro"] = (
-            "não varremos a lista de anúncios nesta execução — rode sem --rapido "
-            "para saber quantos estão dentro de cada promoção")
-    if truncou:
+    if rapido:
+        for campo in ("anuncios_elegiveis", "anuncios_aderidos"):
+            faltando.append(campo)
+            lacunas[campo] = (
+                "não varremos a lista de anúncios nesta execução — rode sem "
+                "--rapido para contar elegíveis e aderidos")
+    elif truncou:
+        # Contagem pela metade apresentada como total e pior que contagem
+        # nenhuma: quem le "1000 anuncios" decide achando que sabe.
+        for campo in ("anuncios_elegiveis", "anuncios_aderidos"):
+            if campo not in faltando:
+                faltando.append(campo)
+            lacunas[campo] = (
+                "alguma campanha passou do teto de %d páginas e a contagem dela "
+                "ficaria menor do que a realidade, então ela vem vazia em vez de "
+                "um número que parece certo" % MAX_PAGINAS)
         avisos.append(
-            "alguma promoção passou do teto de %d páginas; a contagem de anúncios "
-            "cobre só parte dela" % MAX_PAGINAS)
+            "campanha grande demais para contar inteira nesta execução; as "
+            "contagens dela vêm vazias, não zeradas")
     if sem_data:
         avisos.append("%d promoção(ões) sem data de término foram ignoradas" % sem_data)
     if any(i["desconto_minimo"] is None for i in itens):
@@ -158,16 +212,22 @@ def coletar(janela=JANELA_PADRAO, rapido=False, hoje=None):
 
     if any(i["escopo_amplo"] for i in itens):
         avisos.append(
-            "há campanha de escopo amplo: a lista de anúncios dentro muda sozinha "
+            "há campanha de escopo amplo: a lista de elegíveis muda sozinha "
             "conforme o Mercado Livre reavalia a elegibilidade")
 
-    dentro = [i["anuncios_dentro"] for i in itens if i["anuncios_dentro"] is not None]
-    ader = [i["anuncios_aderidos"] for i in itens if i["anuncios_aderidos"] is not None]
+    # ELEGIVEL nao e DENTRO. Somar os dois e dizer "anuncios na promocao" faz o
+    # vendedor achar que aderiu quando so esta habilitado a aderir.
+    avisos.append(
+        "elegível e aderido são coisas diferentes: elegível é o anúncio que PODE "
+        "entrar na campanha, aderido é o que JÁ está dentro")
+
+    eleg = [i["anuncios_elegiveis"] for i in itens]
+    ader = [i["anuncios_aderidos"] for i in itens]
     resumo = {
         "promocoes_na_janela": len(itens),
         "termina_em_3_dias": sum(1 for i in itens if i["dias_restantes"] <= 3),
-        "anuncios_afetados": sum(dentro) if dentro else None,
-        "anuncios_ja_aderidos": sum(ader) if ader else None,
+        "anuncios_elegiveis": None if any(v is None for v in eleg) else sum(eleg),
+        "anuncios_ja_aderidos": None if any(v is None for v in ader) else sum(ader),
     }
 
     return {
@@ -209,10 +269,16 @@ def _main():
     else:
         print("%d promocao(oes) terminando em ate %d dias." % (n, janela))
         for i in d["itens"][:5]:
-            dentro = i["anuncios_dentro"]
-            print("  %-34s termina em %d dia(s)%s" % (
-                i["promocao"][:34], i["dias_restantes"],
-                "" if dentro is None else " · %d anuncio(s)" % dentro))
+            partes = []
+            if i["anuncios_aderidos"] is not None:
+                partes.append("%d ja dentro" % i["anuncios_aderidos"])
+            if i["anuncios_elegiveis"] is not None:
+                partes.append("%d elegivel(is)" % i["anuncios_elegiveis"])
+            if i["meli_banca_pct"] is not None:
+                partes.append("Meli banca %.1f%%" % i["meli_banca_pct"])
+            print("  %-30s termina em %d dia(s)%s" % (
+                i["promocao"][:30], i["dias_restantes"],
+                (" · " + " · ".join(partes)) if partes else ""))
     print("\nVeja no painel:  python3 painel.py")
     return 0
 

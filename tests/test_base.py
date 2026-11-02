@@ -639,20 +639,48 @@ def test_promocoes_ordena_pelo_que_termina_antes(api):
     assert [i["promocao"] for i in d["itens"]] == ["Antes", "Depois"]
 
 
-def test_promocoes_conta_anuncios_e_aderidos(api):
+def test_promocoes_separa_elegivel_de_quem_ja_esta_dentro(api):
+    # Somar os dois e chamar de "anuncios na promocao" faz o vendedor achar que
+    # aderiu quando so esta habilitado a aderir. A operacao real ja tropecou nisso.
     api([_promo("a", "Com itens", 2)],
         {"a": [{"status": "started"}, {"status": "candidate"}, {"status": "started"}]})
     d = promocoes.coletar(hoje=HOJE)
-    assert d["itens"][0]["anuncios_dentro"] == 3
     assert d["itens"][0]["anuncios_aderidos"] == 2
+    assert d["itens"][0]["anuncios_elegiveis"] == 1
+    assert any("elegível e aderido são coisas diferentes" in a for a in d["avisos"])
+
+
+def test_promocoes_traz_quanto_o_meli_banca(api):
+    api([_promo("a", "Com rebate", 2)],
+        {"a": [{"status": "candidate", "meli_percentage": 5.0, "seller_percentage": 10.0},
+               {"status": "candidate", "meli_percentage": 3.0, "seller_percentage": 12.0}]})
+    d = promocoes.coletar(hoje=HOJE)
+    assert d["itens"][0]["meli_banca_pct"] == 4.0
+    assert d["itens"][0]["voce_banca_pct"] == 11.0
+
+
+def test_promocoes_campanha_grande_demais_vem_vazia_nao_truncada(api, monkeypatch):
+    api([_promo("a", "Gigante", 2)])
+    monkeypatch.setattr(promocoes, "MAX_PAGINAS", 1)
+    monkeypatch.setattr(promocoes, "POR_PAGINA", 2)
+    monkeypatch.setattr(promocoes.meli, "request",
+                        lambda m, p, par=None: ({"results": [_promo("a", "Gigante", 2)]}
+                                                if "/users/" in p else
+                                                {"results": [{"status": "candidate"}] * 2,
+                                                 "paging": {"searchAfter": "x"}}))
+    d = promocoes.coletar(hoje=HOJE)
+    assert d["itens"][0]["anuncios_elegiveis"] is None
+    assert d["resumo"]["anuncios_elegiveis"] is None
+    assert "anuncios_elegiveis" in d["faltando"]
+    assert any("vêm vazias, não zeradas" in a for a in d["avisos"])
 
 
 def test_promocoes_modo_rapido_declara_a_lacuna(api):
     api([_promo("a", "X", 2)])
     d = promocoes.coletar(rapido=True, hoje=HOJE)
-    assert d["itens"][0]["anuncios_dentro"] is None
-    assert "anuncios_dentro" in d["faltando"]
-    assert "anuncios_dentro" in d["lacunas"]
+    assert d["itens"][0]["anuncios_elegiveis"] is None
+    assert "anuncios_elegiveis" in d["faltando"]
+    assert "anuncios_elegiveis" in d["lacunas"]
 
 
 def test_promocoes_modo_rapido_nao_chama_a_lista_de_itens(api):
@@ -1942,3 +1970,13 @@ def test_pedidos_comissao_nao_e_total_quando_houve_registro_descartado(pedidos_a
     pedidos_api([[_pedido("a", 100.0), dict(_pedido("b", 50.0), id=None)]])
     d = pedidos.coletar(hoje=HOJE)
     assert d["resumo"]["comissao_total"] is None
+
+
+def test_promocoes_campanha_sem_anuncio_e_zero_de_verdade_nao_lacuna(api):
+    # Pagina vazia e fim, nao estouro de teto. Antes isso virava "truncado" e o
+    # zero verdadeiro sumia atras de uma lacuna.
+    api([_promo("a", "Vazia", 2)], {"a": []})
+    d = promocoes.coletar(hoje=HOJE)
+    assert d["itens"][0]["anuncios_elegiveis"] == 0
+    assert d["itens"][0]["anuncios_aderidos"] == 0
+    assert "anuncios_elegiveis" not in d["faltando"]
