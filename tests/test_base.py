@@ -22,6 +22,7 @@ import painel  # noqa: E402
 import pasta as pasta_mod  # noqa: E402
 import seguro  # noqa: E402
 import atualizacao  # noqa: E402
+import devolucoes  # noqa: E402
 import pedidos  # noqa: E402
 import promocoes  # noqa: E402
 import planilha  # noqa: E402
@@ -2054,3 +2055,157 @@ def test_promocoes_pagina_curta_com_cursor_continua(api, monkeypatch):
     d = promocoes.coletar(hoje=HOJE)
     assert d["itens"][0]["anuncios_elegiveis"] == 1
     assert d["itens"][0]["anuncios_aderidos"] == 1
+
+
+# ---------------------------------------------------------- prometheus-devolucoes
+
+class _ReclamacoesFalsas:
+    """Responde o endereco de reclamacoes, o de motivos e o de conversa."""
+
+    def __init__(self, paginas, motivos=None, conversas=None, erro_na_pagina=None):
+        self.paginas = paginas
+        self.motivos = motivos or {}
+        self.conversas = conversas or {}
+        self.erro_na_pagina = erro_na_pagina
+        self.chamadas = []
+
+    def __call__(self, metodo, path, params=None):
+        self.chamadas.append((metodo, path, dict(params or {})))
+        assert metodo == "GET", "o leitor nao pode fazer nada alem de GET"
+        if path.endswith("/messages"):
+            return self.conversas.get(path.split("/claims/")[1].split("/")[0], [])
+        if "/claims/reasons/" in path:
+            return self.motivos.get(path.rsplit("/", 1)[1], {})
+        if path == "/post-purchase/v1/claims/search":
+            assert "status" in (params or {}), "sem status o endereco devolve 400"
+            n = int((params or {}).get("offset", 0)) // 50
+            if self.erro_na_pagina is not None and n == self.erro_na_pagina:
+                raise devolucoes.meli.ErroDaAPI(502, "caiu")
+            pagina = self.paginas[n] if n < len(self.paginas) else []
+            return {"data": pagina, "paging": {"total": sum(len(p) for p in self.paginas)}}
+        raise AssertionError("endpoint inesperado: %s" % path)
+
+
+def _reclamacao(rid, motivo="PDD9946", etapa="claim", **extra):
+    d = {"id": rid, "resource_id": 123, "type": "mediations", "stage": etapa,
+         "status": "opened", "reason_id": motivo,
+         "date_created": "2026-11-01T10:00:00.000-03:00", "resolution": None}
+    d.update(extra)
+    return d
+
+
+@pytest.fixture
+def reclamacoes_api(monkeypatch):
+    def instalar(paginas, motivos=None, conversas=None, erro_na_pagina=None):
+        falsa = _ReclamacoesFalsas(paginas, motivos, conversas, erro_na_pagina)
+        monkeypatch.setattr(devolucoes.meli, "request", falsa)
+        monkeypatch.setattr(devolucoes.meli, "api",
+                            lambda caminho, par=None: falsa("GET", caminho, par))
+        monkeypatch.setattr(devolucoes.meli, "conta_conectada",
+                            lambda: {"id": 7, "apelido": "LOJA", "site": "MLB"})
+        return falsa
+    return instalar
+
+
+HOJE_D = dt.date(2026, 11, 2)
+
+
+def test_devolucoes_nao_usa_o_detail_como_motivo(reclamacoes_api):
+    # O detail NAO e o motivo: e a resposta do comprador a uma pergunta anterior.
+    # Quatro causas diferentes compartilham "Chegou bem". Agrupar por detail
+    # apaga a causa raiz, que e justamente o que serve para consertar.
+    reclamacoes_api(
+        [[_reclamacao("a", "PDD9946"), _reclamacao("b", "PDD9949")]],
+        motivos={"PDD9946": {"name": "broken_item", "detail": "Chegou bem",
+                             "flow": "post_purchase_delivered"},
+                 "PDD9949": {"name": "not_working_item", "detail": "Chegou bem",
+                             "flow": "post_purchase_delivered"}})
+    d = devolucoes.coletar(hoje=HOJE_D)
+    motivos = {i["motivo"] for i in d["itens"]}
+    assert motivos == {"produto chegou quebrado", "produto não funciona"}
+    assert "Chegou bem" not in json.dumps(d, ensure_ascii=False)
+
+
+def test_devolucoes_motivo_novo_aparece_cru_e_nunca_agrupado(reclamacoes_api):
+    reclamacoes_api([[_reclamacao("a", "PDD0001")]],
+                    motivos={"PDD0001": {"name": "motivo_que_nao_conheco",
+                                         "flow": "post_purchase_delivered"}})
+    d = devolucoes.coletar(hoje=HOJE_D)
+    assert d["itens"][0]["motivo"] == "motivo_que_nao_conheco"
+    assert d["itens"][0]["motivo_traduzido"] is False
+    assert any("ainda não traduz" in a for a in d["avisos"])
+
+
+def test_devolucoes_separa_problema_de_produto_de_problema_de_entrega(reclamacoes_api):
+    reclamacoes_api(
+        [[_reclamacao("a", "PDD9946"), _reclamacao("b", "PNR9504")]],
+        motivos={"PDD9946": {"name": "broken_item", "flow": "post_purchase_delivered"},
+                 "PNR9504": {"name": "estimated_delivery_out_of_time",
+                             "flow": "mediations_undelivered"}})
+    d = devolucoes.coletar(hoje=HOJE_D)
+    assert d["resumo"]["problema_de_produto"] == 1
+    assert d["resumo"]["problema_de_entrega"] == 1
+
+
+def test_devolucoes_sempre_manda_o_filtro_de_situacao(reclamacoes_api):
+    falsa = reclamacoes_api([[_reclamacao("a")]])
+    devolucoes.coletar(hoje=HOJE_D)
+    buscas = [c for c in falsa.chamadas if c[1] == "/post-purchase/v1/claims/search"]
+    assert buscas and all(c[2].get("status") == "opened" for c in buscas)
+
+
+def test_devolucoes_texto_da_conversa_nunca_entra_no_arquivo(reclamacoes_api):
+    reclamacoes_api(
+        [[_reclamacao("a")]],
+        conversas={"a": [{"message": "SEGREDO DO COMPRADOR", "sender_role": "complainant",
+                          "date_created": "2026-11-01T11:00:00.000-03:00",
+                          "attachments": [{"x": 1}]}]})
+    d = devolucoes.coletar(hoje=HOJE_D)
+    bruto = json.dumps(d, ensure_ascii=False)
+    assert "SEGREDO DO COMPRADOR" not in bruto
+    assert "complainant" not in bruto
+    assert d["itens"][0]["esperando_sua_resposta"] is True
+    assert d["itens"][0]["tem_anexo"] is True
+
+
+def test_devolucoes_quando_voce_respondeu_por_ultimo_nao_esta_esperando(reclamacoes_api):
+    reclamacoes_api(
+        [[_reclamacao("a")]],
+        conversas={"a": [{"sender_role": "complainant",
+                          "date_created": "2026-11-01T10:00:00.000-03:00"},
+                         {"sender_role": "respondent",
+                          "date_created": "2026-11-01T12:00:00.000-03:00"}]})
+    d = devolucoes.coletar(hoje=HOJE_D)
+    assert d["itens"][0]["esperando_sua_resposta"] is False
+
+
+def test_devolucoes_desfecho_vira_campo_nomeado_sem_resposta_crua(reclamacoes_api):
+    reclamacoes_api([[_reclamacao("a", resolution={
+        "reason": "item_returned", "benefited": ["complainant"],
+        "closed_by": "mediator", "applied_coverage": True})]])
+    d = devolucoes.coletar(hoje=HOJE_D)
+    i = d["itens"][0]
+    assert i["desfecho"] == "produto devolvido"
+    assert i["quem_ganhou"] == "o comprador"
+    assert "applied_coverage" not in json.dumps(d)
+
+
+def test_devolucoes_falha_na_primeira_pagina_nao_vira_zero_reclamacoes(reclamacoes_api):
+    reclamacoes_api([[_reclamacao("a")]], erro_na_pagina=0)
+    with pytest.raises(devolucoes.meli.ErroDaAPI):
+        devolucoes.coletar(hoje=HOJE_D)
+
+
+def test_devolucoes_teto_de_paginas_nao_vira_contagem_parcial(reclamacoes_api, monkeypatch):
+    monkeypatch.setattr(devolucoes, "MAX_PAGINAS", 1)
+    reclamacoes_api([[_reclamacao(str(i)) for i in range(50)],
+                     [_reclamacao("x")]])
+    d = devolucoes.coletar(hoje=HOJE_D)
+    assert d["resumo"]["abertas"] is None
+    assert "abertas" in d["faltando"]
+
+
+def test_devolucoes_deduplica_por_id(reclamacoes_api):
+    reclamacoes_api([[_reclamacao("a")] * 50, [_reclamacao("a")]])
+    d = devolucoes.coletar(hoje=HOJE_D)
+    assert d["resumo"]["abertas"] == 1
