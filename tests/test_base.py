@@ -2126,14 +2126,71 @@ def test_devolucoes_nao_usa_o_detail_como_motivo(reclamacoes_api):
     assert "Chegou bem" not in json.dumps(d, ensure_ascii=False)
 
 
-def test_devolucoes_motivo_novo_aparece_cru_e_nunca_agrupado(reclamacoes_api):
+def test_devolucoes_motivo_novo_nao_publica_o_texto_remoto(reclamacoes_api):
+    # O arquivo vira painel publicado: valor que veio do servidor e que a gente
+    # nao reconhece NAO entra. O codigo entra porque tem forma verificada.
     reclamacoes_api([[_reclamacao("a", "PDD0001")]],
                     motivos={"PDD0001": {"name": "motivo_que_nao_conheco",
                                          "flow": "post_purchase_delivered"}})
     d = devolucoes.coletar(hoje=HOJE_D)
-    assert d["itens"][0]["motivo"] == "motivo_que_nao_conheco"
+    assert d["itens"][0]["motivo"] is None
     assert d["itens"][0]["motivo_traduzido"] is False
-    assert any("ainda não traduz" in a for a in d["avisos"])
+    assert "motivo_que_nao_conheco" not in json.dumps(d, ensure_ascii=False)
+    assert any("PDD0001" in a for a in d["avisos"])
+
+
+def test_devolucoes_desfecho_desconhecido_nao_publica_o_que_veio(reclamacoes_api):
+    # O Codex reproduziu quem_ganhou: "Maria CPF 123" interpolando o valor cru.
+    reclamacoes_api([[_reclamacao("a", resolution={
+        "reason": "motivo_novo", "benefited": ["Maria CPF 123"],
+        "closed_by": "alguem_novo"})]])
+    d = devolucoes.coletar(hoje=HOJE_D)
+    bruto = json.dumps(d, ensure_ascii=False)
+    assert "Maria CPF 123" not in bruto
+    assert "alguem_novo" not in bruto
+    assert d["itens"][0]["quem_ganhou"] is None
+    assert any("não conhece" in a for a in d["avisos"])
+
+
+def test_devolucoes_ordem_das_mensagens_respeita_o_fuso(reclamacoes_api):
+    # Comparar data como TEXTO inverte: 12:00Z e depois de 10:00-03:00 na string,
+    # mas antes no relogio. O vendedor respondeu por ultimo.
+    reclamacoes_api(
+        [[_reclamacao("a")]],
+        conversas={"a": [{"sender_role": "complainant",
+                          "date_created": "2026-11-01T12:00:00.000Z"},
+                         {"sender_role": "respondent",
+                          "date_created": "2026-11-01T10:00:00.000-03:00"}]})
+    d = devolucoes.coletar(hoje=HOJE_D)
+    assert d["itens"][0]["esperando_sua_resposta"] is False
+
+
+def test_devolucoes_conversa_sem_data_nao_afirma_quem_falou(reclamacoes_api):
+    reclamacoes_api([[_reclamacao("a")]],
+                    conversas={"a": [{"sender_role": "complainant"}]})
+    d = devolucoes.coletar(hoje=HOJE_D)
+    assert d["itens"][0]["esperando_sua_resposta"] is None
+    assert d["resumo"]["esperando_sua_resposta"] is None
+    assert "esperando_sua_resposta" in d["faltando"]
+
+
+def test_devolucoes_cobertura_parcial_de_conversa_nao_vira_total(reclamacoes_api, monkeypatch):
+    monkeypatch.setattr(devolucoes, "MAX_CONVERSAS", 1)
+    reclamacoes_api([[_reclamacao("a"), _reclamacao("b")]],
+                    conversas={"a": [{"sender_role": "complainant",
+                                      "date_created": "2026-11-01T10:00:00.000-03:00"}]})
+    d = devolucoes.coletar(hoje=HOJE_D)
+    assert d["resumo"]["esperando_sua_resposta"] is None
+    assert d["resumo"]["conversas_com_anexo"] is None
+
+
+def test_devolucoes_truncado_contamina_todos_os_totais(reclamacoes_api, monkeypatch):
+    monkeypatch.setattr(devolucoes, "MAX_PAGINAS", 1)
+    reclamacoes_api([[_reclamacao(str(i)) for i in range(50)], [_reclamacao("x")]])
+    d = devolucoes.coletar(hoje=HOJE_D)
+    for campo in ("abertas", "em_mediacao", "motivos_distintos",
+                  "problema_de_produto", "mais_antiga_em_dias"):
+        assert d["resumo"][campo] is None, campo
 
 
 def test_devolucoes_separa_problema_de_produto_de_problema_de_entrega(reclamacoes_api):
@@ -2165,7 +2222,7 @@ def test_devolucoes_texto_da_conversa_nunca_entra_no_arquivo(reclamacoes_api):
     assert "SEGREDO DO COMPRADOR" not in bruto
     assert "complainant" not in bruto
     assert d["itens"][0]["esperando_sua_resposta"] is True
-    assert d["itens"][0]["tem_anexo"] is True
+    assert d["itens"][0]["conversa_com_anexo"] is True
 
 
 def test_devolucoes_quando_voce_respondeu_por_ultimo_nao_esta_esperando(reclamacoes_api):
@@ -2209,3 +2266,19 @@ def test_devolucoes_deduplica_por_id(reclamacoes_api):
     reclamacoes_api([[_reclamacao("a")] * 50, [_reclamacao("a")]])
     d = devolucoes.coletar(hoje=HOJE_D)
     assert d["resumo"]["abertas"] == 1
+
+
+def test_devolucoes_mediador_e_um_terceiro_papel(reclamacoes_api):
+    # Numa conta com muita disputa o mediador fala bastante. Deixar ele fora da
+    # lista fazia a conversa inteira virar indeterminada. E mediador falando por
+    # ultimo NAO vira "esperando voce": pode ser decisao final.
+    reclamacoes_api(
+        [[_reclamacao("a")]],
+        conversas={"a": [{"sender_role": "complainant",
+                          "date_created": "2026-11-01T10:00:00.000-03:00"},
+                         {"sender_role": "mediator",
+                          "date_created": "2026-11-01T11:00:00.000-03:00"}]})
+    d = devolucoes.coletar(hoje=HOJE_D)
+    assert d["itens"][0]["esperando_sua_resposta"] is False
+    assert d["itens"][0]["ultima_fala"] == "o mediador do Mercado Livre"
+    assert d["resumo"]["mediador_falou_por_ultimo"] == 1
