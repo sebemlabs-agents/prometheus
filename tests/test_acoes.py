@@ -1090,3 +1090,52 @@ def test_token_dentro_do_formato_de_codigo_e_descartado(pasta, monkeypatch):
                         corpo={"promotion_id": "P-1"}, anuncio="MLB123")
     assert "TOKEN-SECRETO" not in str(e.value)
     assert "TOKEN-SECRETO" not in (pasta / "acoes.txt").read_text(encoding="utf-8")
+
+
+def test_promover_leitura_ilegivel_nao_vira_fora_da_campanha(conta_api, monkeypatch):
+    """Resposta que nao deu para ler dizia 'ele nao esta em campanha nenhuma'."""
+    monkeypatch.setattr(promover.meli, "api",
+                        lambda c, p=None: {"message": "erro de leitura"})
+    with pytest.raises(promover.LeituraFalhou):
+        promover.candidatos("MLB123")
+
+
+def test_promover_reconciliar_com_leitura_ilegivel_nao_fecha(conta_api, monkeypatch, capsys):
+    escrever.abrir_tentativa("aderir", "MLB123", "x")
+
+    def api(caminho, params=None):
+        if caminho.startswith("/items/"):
+            return {"id": "MLB123", "price": 100.0, "status": "active"}
+        return {"message": "erro de leitura"}
+
+    monkeypatch.setattr(promover.meli, "api", api)
+    assert promover.reconciliar("MLB123") == 1
+    assert escrever.pendencias("MLB123")
+    assert "continua ABERTA" in capsys.readouterr().out
+
+
+def test_promover_campanha_vazia_de_verdade_nao_e_leitura_falha(conta_api, monkeypatch):
+    """`results` nulo com total zero e campanha vazia mesmo: isso nao levanta."""
+    monkeypatch.setattr(promover.meli, "api",
+                        lambda c, p=None: {"results": None, "paging": {"total": 0}})
+    assert promover.candidatos("MLB123") == []
+
+
+def test_responder_reconciliar_com_leitura_ilegivel_nao_fecha(perguntas_api, capsys):
+    escrever.abrir_tentativa("responder", "pergunta-%s" % PERGUNTA["id"], "x")
+    perguntas_api["p"] = {"message": "erro de leitura"}
+    assert responder.reconciliar(PERGUNTA["id"]) == 1
+    assert escrever.pendencias("pergunta-%s" % PERGUNTA["id"])
+    saida = capsys.readouterr().out
+    assert "continua ABERTA" in saida
+    assert "ainda nao publicada" not in saida
+
+
+def test_qualquer_comando_das_acoes_limpa_rascunho_vencido(pasta, monkeypatch):
+    """A promessa da skill valia so para comando que lia intencoes."""
+    escrever.guardar_intencao({"conta": CONTA, "acao": "responder", "pergunta": 9,
+                               "texto": "rascunho vencido"})
+    depois = time.time() + escrever.VALIDADE + 1
+    monkeypatch.setattr(escrever.time, "time", lambda: depois)
+    escrever.manutencao()
+    assert "rascunho vencido" not in (pasta / "intencoes.json").read_text(encoding="utf-8")

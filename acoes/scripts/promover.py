@@ -41,6 +41,10 @@ class NaoDaParaFazer(RuntimeError):
     """Falta condicao para a acao. A mensagem diz qual."""
 
 
+class LeituraFalhou(RuntimeError):
+    """A resposta nao deu para ler. Nao e lista vazia: e ausencia de resposta."""
+
+
 def _num(v):
     if isinstance(v, bool) or v is None:
         return None
@@ -66,13 +70,23 @@ def preco_vivo(mlb):
 
 
 def candidatos(mlb):
+    """As promocoes deste anuncio. Resposta ilegivel LEVANTA, nao devolve vazio.
+
+    Devolver lista vazia aqui dizia "ele nao esta em campanha nenhuma" quando a
+    verdade era "nao consegui ler" — e era com essa frase que a reconciliacao
+    fechava uma pendencia sem saber nada."""
     corpo = meli.api("/seller-promotions/items/" + mlb, {"app_version": "v2"})
     if isinstance(corpo, list):
         return corpo
     if isinstance(corpo, dict):
         achados = corpo.get("results")
-        return achados if isinstance(achados, list) else []
-    return []
+        if isinstance(achados, list):
+            return achados
+        if (corpo.get("paging") or {}).get("total") == 0:
+            return []
+    raise LeituraFalhou(
+        "Nao consegui ler as promocoes do anuncio %s: a resposta nao veio no "
+        "formato esperado." % mlb)
 
 
 def achar(lista, campanha):
@@ -379,11 +393,17 @@ def reconciliar(mlb):
 
 def _reconciliar(mlb):
     presas = escrever.pendencias(mlb)
-    praticado, situacao = preco_vivo(mlb)
+    try:
+        praticado, situacao = preco_vivo(mlb)
+        promos = candidatos(mlb)
+    except (LeituraFalhou, meli.ErroDaAPI) as e:
+        print("Nao consegui ler o estado deste anuncio: %s" % e)
+        print("\nA acao pendente continua ABERTA de proposito. Fechar sem ler "
+              "seria trocar 'nao sei' por 'resolvido'. Tente de novo em instantes.")
+        return 1
     print("Anuncio   %s (%s)" % (mlb, situacao or "situacao desconhecida"))
     print("Preco     praticado hoje: %s" % _dinheiro(praticado))
-    dentro = [c for c in candidatos(mlb)
-              if (c.get("status") or "").lower() in DENTRO]
+    dentro = [c for c in promos if (c.get("status") or "").lower() in DENTRO]
     if dentro:
         print("Campanhas em que ele esta DENTRO:")
         for c in dentro:
@@ -394,10 +414,8 @@ def _reconciliar(mlb):
         print("\nNao havia acao pendente para este anuncio.")
         return 0
     if praticado is None and situacao is None:
-        # Leitura que nao deu certo nao fecha nada: seria trocar "nao sei" por
-        # "resolvido", que e exatamente o que a pendencia existe para impedir.
-        print("\nNao consegui ler o estado deste anuncio. A acao pendente "
-              "continua aberta de proposito. Tente de novo em instantes.")
+        print("\nO anuncio nao devolveu preco nem situacao. A acao pendente "
+              "continua aberta de proposito.")
         return 1
     for p in presas:
         escrever.fechar_tentativa(
@@ -413,6 +431,7 @@ def _reconciliar(mlb):
 # --------------------------------------------------------------------- CLI
 
 def _main(argv=None):
+    escrever.manutencao()
     a = list(argv if argv is not None else sys.argv[1:])
     if not a:
         print(__doc__.strip())
@@ -456,7 +475,8 @@ def _erro(msg):
 if __name__ == "__main__":
     try:
         sys.exit(_main())
-    except (NaoDaParaFazer, escrever.SemPermissao, escrever.ConferenciaInvalida,
+    except (NaoDaParaFazer, LeituraFalhou, escrever.SemPermissao,
+            escrever.ConferenciaInvalida,
             escrever.ItemTrancado, escrever.ReciboImpossivel,
             escrever.ReciboIlegivel, escrever.ReciboNoTeto,
             escrever.RespostaIncerta, escrever.ErroNaEscrita,

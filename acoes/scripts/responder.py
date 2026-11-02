@@ -183,24 +183,42 @@ def reconciliar(ident):
         return _reconciliar(ident)
 
 
+def _leu_de_verdade(p, ident):
+    """Dicionario de erro tambem e dicionario: `{"message": ...}` passava por
+    leitura valida e fazia a reconciliacao afirmar que a resposta nao saiu."""
+    return (isinstance(p, dict) and str(p.get("id") or "") == str(ident)
+            and bool(p.get("status")))
+
+
 def _reconciliar(ident):
     presas = escrever.pendencias("pergunta-%s" % ident)
-    p = uma(ident)
-    resposta = (p or {}).get("answer") if isinstance(p, dict) else None
-    tem = bool((resposta or {}).get("text") if isinstance(resposta, dict) else None)
+    try:
+        p = uma(ident)
+    except meli.ErroDaAPI as e:
+        p = None
+        print("Nao consegui ler a pergunta: %s" % e)
+    if not _leu_de_verdade(p, ident):
+        # A conferencia do estado vem ANTES de imprimir qualquer estado: dizer
+        # "ainda nao publicada" sobre uma leitura que falhou e pior que nao
+        # dizer nada.
+        print("Nao consegui ler o estado da pergunta %s." % ident)
+        if presas:
+            print("\nA acao pendente continua ABERTA de proposito: fechar sem "
+                  "ler seria trocar 'nao sei' por 'resolvido'. Tente de novo em "
+                  "instantes.")
+        return 1
+
+    resposta = p.get("answer")
+    texto = (resposta or {}).get("text") if isinstance(resposta, dict) else None
+    tem = bool(texto)
     print("Pergunta  %s" % ident)
-    print("Estado    %s" % ((p or {}).get("status") or "nao sei"))
+    print("Estado    %s" % p.get("status"))
     print("Resposta  %s" % ("JA publicada" if tem else "ainda nao publicada"))
     if tem:
-        print("Texto     %s" % " ".join(
-            ((resposta or {}).get("text") or "").split())[:200])
+        print("Texto     %s" % " ".join((texto or "").split())[:200])
     if not presas:
         print("\nNao havia acao pendente para esta pergunta.")
         return 0
-    if not isinstance(p, dict) or not p:
-        print("\nNao consegui ler a pergunta. A acao pendente continua aberta "
-              "de proposito. Tente de novo em instantes.")
-        return 1
     for x in presas:
         escrever.fechar_tentativa(
             x["id"], "reconciliado",
@@ -237,6 +255,7 @@ def listar():
 
 
 def _main(argv=None):
+    escrever.manutencao()
     a = list(argv if argv is not None else sys.argv[1:])
     if not a:
         return listar()
