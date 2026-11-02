@@ -2507,3 +2507,68 @@ def test_anuncios_a_janela_vem_do_arquivo_de_pedidos(anuncios_api):
                  corpos=[_corpo("MLB1")], visitas={"MLB1": 100})
     d = anuncios.coletar(hoje=HOJE_A)
     assert d["resumo"]["janela_em_dias"] == 7
+
+
+# ------------------------------------------- trocar a URL de retorno depois
+
+def _pasta_com_credenciais(tmp_path, uri="https://loja.invalid/callback"):
+    arq = tmp_path / "credenciais.txt"
+    arq.write_text(
+        "MELI_APP_ID=123456\n"
+        "MELI_CLIENT_SECRET=segredo-que-nao-pode-sumir\n"
+        "MELI_REDIRECT_URI=%s\n"
+        "SHOPEE_PARTNER_ID=\n" % uri, encoding="utf-8")
+    return arq
+
+
+def test_trocar_uri_mexe_so_na_linha_da_url(tmp_path):
+    arq = _pasta_com_credenciais(tmp_path)
+    r = pasta_mod.trocar_uri("https://prometheus.exemplo.com.br/", caminho=tmp_path)
+    texto = arq.read_text(encoding="utf-8")
+    assert "MELI_REDIRECT_URI=https://prometheus.exemplo.com.br/" in texto
+    # o segredo das outras linhas nao pode ter sido tocado
+    assert "MELI_CLIENT_SECRET=segredo-que-nao-pode-sumir" in texto
+    assert "MELI_APP_ID=123456" in texto
+    assert "SHOPEE_PARTNER_ID=" in texto
+    assert r["anterior"] == "https://loja.invalid/callback"
+
+
+def test_trocar_uri_recusa_endereco_sem_https(tmp_path):
+    _pasta_com_credenciais(tmp_path)
+    with pytest.raises(ValueError):
+        pasta_mod.trocar_uri("http://sem-tls.exemplo.com/", caminho=tmp_path)
+
+
+def test_trocar_uri_recusa_coisa_que_nao_e_endereco(tmp_path):
+    _pasta_com_credenciais(tmp_path)
+    for ruim in ("https://", "https:// com espaco/", "qualquer coisa"):
+        with pytest.raises(ValueError):
+            pasta_mod.trocar_uri(ruim, caminho=tmp_path)
+
+
+def test_trocar_uri_sem_arquivo_diz_o_que_fazer(tmp_path):
+    with pytest.raises(ValueError) as erro:
+        pasta_mod.trocar_uri("https://x.exemplo.com/", caminho=tmp_path)
+    assert "pasta.py" in str(erro.value)
+
+
+def test_trocar_uri_avisa_que_a_conexao_continua_valendo(tmp_path):
+    _pasta_com_credenciais(tmp_path)
+    (tmp_path / "tokens.json").write_text("{}", encoding="utf-8")
+    r = pasta_mod.trocar_uri("https://x.exemplo.com/", caminho=tmp_path)
+    # trocar a URL NAO derruba o acesso: ela so e usada ao autorizar
+    assert r["conectado"] is True
+
+
+def test_check_mostra_a_url_de_retorno_porque_ela_nao_e_segredo(tmp_path, monkeypatch):
+    # O erro numero um desta conexao e a URL nao bater com a do DevCenter.
+    # Nao da para comparar o que nao se ve — e ela viaja na barra do navegador.
+    arq = _pasta_com_credenciais(tmp_path, uri="https://visivel.exemplo.com/")
+    monkeypatch.setattr(meli, "ENV_FILE", arq)
+    monkeypatch.setattr(meli, "TOKENS_FILE", tmp_path / "tokens.json")
+    for chave in ("MELI_APP_ID", "MELI_CLIENT_SECRET", "MELI_REDIRECT_URI"):
+        monkeypatch.delenv(chave, raising=False)
+    s = meli.situacao_credenciais()
+    assert s["chaves"]["MELI_REDIRECT_URI"] == "https://visivel.exemplo.com/"
+    assert s["chaves"]["MELI_CLIENT_SECRET"] == "preenchido"
+    assert s["chaves"]["MELI_APP_ID"] == "preenchido"

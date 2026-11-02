@@ -92,11 +92,20 @@ def carregar_env():
 
 def situacao_credenciais():
     """Para o comando check: diz apenas 'preenchido' ou 'VAZIO' por chave.
-    Nunca devolve o valor."""
+
+    Nunca devolve o valor de um segredo. A URL DE RETORNO e a excecao, e de
+    proposito: ela nao e segredo (viaja na barra do navegador) e o erro numero
+    um desta conexao e ela nao bater com a cadastrada no DevCenter. Nao da para
+    comparar o que nao se ve.
+    """
     vals = _ler_arquivo_env()
     estado = {}
     for k in CHAVES:
-        estado[k] = "preenchido" if (os.environ.get(k) or vals.get(k)) else "VAZIO"
+        valor = os.environ.get(k) or vals.get(k)
+        if k == "MELI_REDIRECT_URI" and valor:
+            estado[k] = valor
+        else:
+            estado[k] = "preenchido" if valor else "VAZIO"
     return {
         "arquivo": ENV_FILE.name,
         "arquivo_existe": ENV_FILE.exists(),
@@ -296,6 +305,8 @@ def _main():
             return 1
         for k, v in s["chaves"].items():
             print("%-22s %s" % (k, v))
+            if k == "MELI_REDIRECT_URI" and v not in ("VAZIO",):
+                print("%-22s (confira se esta IDENTICA no DevCenter)" % "")
         print("%-22s %s" % ("conexao", "feita" if s["tokens"] else "ainda nao (rode autorizar.py)"))
         return 1 if "VAZIO" in s["chaves"].values() else 0
     if cmd == "me":

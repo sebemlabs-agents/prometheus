@@ -23,6 +23,32 @@
 > 4. anotar a mudança aqui embaixo
 > 5. publicar pelo Cypher Guard
 
+## 1.7.0 — 2 de novembro de 2026
+
+**Agora dá para trocar a URL de retorno depois, sem refazer a pasta.**
+
+```
+python3 pasta.py --trocar-uri https://seu-endereco/
+```
+
+Antes não havia caminho para isso: o arquivo de credenciais só recebia a URL quando era
+criado, e o assistente não pode abrir esse arquivo. Quem errou o endereço, quem quer usar
+outra página de retorno ou quem mexeu nas permissões ficava sem saída. O comando mexe **só
+naquela linha** — o resto do arquivo, que tem segredo, não é tocado — e grava com a mesma
+proteção de sempre.
+
+**O `check` passou a mostrar a URL de retorno**, em vez de dizer só "preenchido". Ela não é
+segredo — viaja na barra do navegador — e **o erro número um desta conexão é ela não bater
+com a cadastrada no DevCenter**. Não dá para comparar o que não se vê. App ID e Client Secret
+continuam invisíveis.
+
+**Duas coisas que a gente mediu e que o pacote passou a dizer com todas as letras:**
+
+- **Trocar a URL de retorno não derruba a conexão.** Ela só é usada no momento de autorizar.
+- **Mudar permissão no DevCenter exige autorizar de novo.** O escopo fica gravado no acesso;
+  sem reautorizar, a chamada volta `403` sem explicar por quê. Isso foi medido nas duas
+  direções, com a mesma chamada antes e depois.
+
 ## 1.6.2 — 2 de novembro de 2026
 
 **Só texto: o pacote passou a dizer o que é.**
