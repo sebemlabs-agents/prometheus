@@ -141,6 +141,20 @@ class ConferenciaInvalida(RuntimeError):
     """O codigo nao existe, venceu, ja foi usado, ou e de outra conta."""
 
 
+def manutencao():
+    """Roda no comeco de QUALQUER comando das ferramentas de acao.
+
+    A limpeza do rascunho vencido acontecia so quando algo precisava ler as
+    intencoes — e comando que nao le nenhuma nao limpava nada, contrariando o
+    que a skill promete. Agora todo caminho passa por aqui."""
+    try:
+        with trava_das_intencoes():
+            _ler_intencoes()
+    except (ItemTrancado, ReciboImpossivel):
+        # Outra execucao esta mexendo nas intencoes: ela mesma vai limpar.
+        pass
+
+
 def esperar(segundos):
     """Isolado para o teste poder adiantar o relogio sem esperar de verdade."""
     time.sleep(segundos)
@@ -644,6 +658,7 @@ def confirmado(ident, nota):
 # --------------------------------------------------------------------- CLI
 
 def _main():
+    manutencao()
     if len(sys.argv) > 1 and sys.argv[1] == "permissao":
         nomes = escopos_concedidos()
         print("Escopos que a autorizacao desta pasta concedeu:\n")
