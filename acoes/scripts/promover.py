@@ -92,11 +92,14 @@ def candidatos(mlb):
     # "nenhuma campanha", e nao conhecer o estado de um registro faz a
     # reconciliacao concluir "fora" sobre algo que ela nao leu.
     for c in achados:
-        if not isinstance(c, dict) or not c.get("id") or not c.get("status"):
+        # Exige TIPO e ESTADO, nao identificador: medido na conta real em
+        # 02/11/2026, a entrada de PRICE_DISCOUNT vem legitimamente SEM `id`
+        # (e o mesmo motivo por que a saida dela leva so promotion_type). Exigir
+        # id aqui recusava uma leitura perfeitamente boa.
+        if not isinstance(c, dict) or not c.get("type") or not c.get("status"):
             raise LeituraFalhou(
-                "A lista de promocoes do anuncio %s veio com registro sem "
-                "identificador ou sem estado. Nao sei dizer em que campanha ele "
-                "esta." % mlb)
+                "A lista de promocoes do anuncio %s veio com registro sem tipo "
+                "ou sem estado. Nao sei dizer em que campanha ele esta." % mlb)
     return achados
 
 
@@ -108,11 +111,16 @@ def achar(lista, campanha):
 
 
 def _preco_proposto(cand):
-    """O que a API propos para este candidato. Nada calculado aqui."""
-    for chave in ("suggested_discounted_price", "price"):
-        v = _num(cand.get(chave))
-        if v is not None:
-            return v, chave
+    """O que a API propos para este candidato. Nada calculado aqui.
+
+    **So `suggested_discounted_price`, e so se for positivo.** Medido na conta
+    real em 02/11/2026: neste endereco, `price` vem **0 em todos os candidatos**.
+    E o terceiro significado do mesmo nome de campo nesta API — no anuncio e o
+    preco praticado, na lista da campanha e o preco na campanha, e aqui e zero.
+    Usar `price` como alternativa poria um anuncio a R$ 0,00."""
+    v = _num(cand.get("suggested_discounted_price"))
+    if v is not None and v > 0:
+        return v, "suggested_discounted_price"
     return None, None
 
 
@@ -161,8 +169,16 @@ def conferir(acao, mlb, campanha):
     proposto, de_onde = _preco_proposto(cand)
     if acao == "aderir" and proposto is None:
         raise NaoDaParaFazer(
-            "A API nao devolveu preco proposto para este candidato, e este "
-            "pacote nao inventa preco. Sem numero da fonte, nao envio.")
+            "A API nao devolveu preco proposto (positivo) para este candidato, "
+            "e este pacote nao inventa preco. Sem numero da fonte, nao envio.")
+    minimo = _num(cand.get("min_discounted_price"))
+    if acao == "aderir" and minimo is not None and proposto < minimo:
+        # Numero da propria API contra numero da propria API: se nem isso fecha,
+        # nao sou eu que vou decidir qual dos dois vale.
+        raise NaoDaParaFazer(
+            "O preco proposto (%s) e menor que o minimo que a propria campanha "
+            "declara (%s). Nao envio com os dois numeros em desacordo."
+            % (_dinheiro(proposto), _dinheiro(minimo)))
 
     valores = {
         "preco_hoje": r["praticado"],
