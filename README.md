@@ -31,6 +31,23 @@ com duas diferenças: lá não existe menu, e a atualização é manual
 A garantia não é promessa: o cliente HTTP do pacote recusa qualquer chamada que não seja
 leitura **antes de ela sair do seu computador**.
 
+### E se eu quiser que ele aja?
+
+Existe um **segundo pacote**, separado de propósito: **`prometheus-acoes`**. Ele adere um
+anúncio a uma campanha (e sai dela) e publica resposta a pergunta de pré-venda — uma ação por
+vez, sempre mostrando o antes e o depois com número antes de enviar, sempre com um código que
+você confirma, e sempre com recibo.
+
+Ele exige **permissão de escrita** na autorização do seu aplicativo, que é uma escolha sua no
+DevCenter. Enquanto você não instalar esse pacote e não conceder essa permissão, **não existe
+interruptor** que faça o `prometheus` mudar algo na sua conta — a recusa está no código, não
+numa configuração.
+
+```
+/plugin marketplace add sebemlabs-agents/prometheus
+/plugin install prometheus-acoes
+```
+
 ## Começar
 
 ### 1. Instalar o pacote
