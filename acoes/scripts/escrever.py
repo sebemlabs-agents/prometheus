@@ -687,7 +687,8 @@ def _main():
         return 0
     print(__doc__.strip().splitlines()[0])
     print("\nUso:  python3 escrever.py permissao")
-    print("      python3 escrever.py limpar      (apaga conferencia vencida)")
+    print("      python3 escrever.py limpar      (apaga TODA conferencia "
+          "guardada, inclusive as validas)")
     return 0
 
 
