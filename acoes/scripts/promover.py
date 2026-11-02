@@ -76,17 +76,28 @@ def candidatos(mlb):
     verdade era "nao consegui ler" — e era com essa frase que a reconciliacao
     fechava uma pendencia sem saber nada."""
     corpo = meli.api("/seller-promotions/items/" + mlb, {"app_version": "v2"})
+    achados = None
     if isinstance(corpo, list):
-        return corpo
-    if isinstance(corpo, dict):
-        achados = corpo.get("results")
-        if isinstance(achados, list):
-            return achados
-        if (corpo.get("paging") or {}).get("total") == 0:
+        achados = corpo
+    elif isinstance(corpo, dict):
+        if isinstance(corpo.get("results"), list):
+            achados = corpo["results"]
+        elif (corpo.get("paging") or {}).get("total") == 0:
             return []
-    raise LeituraFalhou(
-        "Nao consegui ler as promocoes do anuncio %s: a resposta nao veio no "
-        "formato esperado." % mlb)
+    if achados is None:
+        raise LeituraFalhou(
+            "Nao consegui ler as promocoes do anuncio %s: a resposta nao veio "
+            "no formato esperado." % mlb)
+    # Lista nao basta: uma lista com registro sem `id` e sem `status` nao e
+    # "nenhuma campanha", e nao conhecer o estado de um registro faz a
+    # reconciliacao concluir "fora" sobre algo que ela nao leu.
+    for c in achados:
+        if not isinstance(c, dict) or not c.get("id") or not c.get("status"):
+            raise LeituraFalhou(
+                "A lista de promocoes do anuncio %s veio com registro sem "
+                "identificador ou sem estado. Nao sei dizer em que campanha ele "
+                "esta." % mlb)
+    return achados
 
 
 def achar(lista, campanha):
