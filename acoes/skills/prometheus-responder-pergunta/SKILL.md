@@ -82,8 +82,9 @@ python3 responder.py reconciliar 13657433363
 - **o rascunho fica em `intencoes.json`**, só na pasta dele. Ele vale 10 minutos e é apagado
   quando ele confere de novo, quando ele publica, ou **na próxima vez que a ferramenta roda**
   depois de vencer. Isso significa que, se ele fechar o terminal e não voltar, o texto fica no
-  arquivo até a próxima execução — e isso é a verdade, não "10 minutos e sumiu". Para apagar na
-  hora: `python3 escrever.py limpar`.
+  arquivo até a próxima execução — e isso é a verdade, não "10 minutos e sumiu". Para apagar na hora, inclusive
+  as conferências ainda válidas: `python3 escrever.py limpar` — depois disso é preciso
+  conferir de novo.
 
   O rascunho não é guardado por conveniência: é ele que amarra o código ao **texto exato**, e é
   o que impede publicar uma versão que ele não leu.

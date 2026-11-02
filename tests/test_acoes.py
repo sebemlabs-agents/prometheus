@@ -1139,3 +1139,40 @@ def test_qualquer_comando_das_acoes_limpa_rascunho_vencido(pasta, monkeypatch):
     monkeypatch.setattr(escrever.time, "time", lambda: depois)
     escrever.manutencao()
     assert "rascunho vencido" not in (pasta / "intencoes.json").read_text(encoding="utf-8")
+
+
+def test_promover_lista_com_registro_sem_estado_nao_e_nenhuma_campanha(conta_api, monkeypatch):
+    """Lista nao basta: registro sem id nem estado nao prova ausencia."""
+    monkeypatch.setattr(promover.meli, "api",
+                        lambda c, p=None: [{"message": "erro sem estado"}])
+    with pytest.raises(promover.LeituraFalhou):
+        promover.candidatos("MLB123")
+
+
+def test_promover_reconciliar_com_registro_quebrado_nao_fecha(conta_api, monkeypatch):
+    escrever.abrir_tentativa("aderir", "MLB123", "x")
+
+    def api(caminho, params=None):
+        if caminho.startswith("/items/"):
+            return {"id": "MLB123", "price": 100.0, "status": "active"}
+        return [{"message": "erro sem estado"}]
+
+    monkeypatch.setattr(promover.meli, "api", api)
+    assert promover.reconciliar("MLB123") == 1
+    assert escrever.pendencias("MLB123")
+
+
+def test_limpar_apaga_tambem_a_conferencia_valida(pasta, capsys):
+    """"Apagar na hora" tem de apagar na hora, senao a skill promete demais."""
+    cod = escrever.guardar_intencao({"conta": CONTA, "acao": "responder",
+                                     "pergunta": 5, "texto": "rascunho"})
+    import sys as _sys
+    guardado = _sys.argv
+    _sys.argv = ["escrever.py", "limpar"]
+    try:
+        escrever._main()
+    finally:
+        _sys.argv = guardado
+    with pytest.raises(escrever.ConferenciaInvalida):
+        escrever.consumir_intencao(cod)
+    assert "rascunho" not in (pasta / "intencoes.json").read_text(encoding="utf-8")

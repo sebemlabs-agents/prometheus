@@ -150,9 +150,11 @@ def manutencao():
     try:
         with trava_das_intencoes():
             _ler_intencoes()
-    except (ItemTrancado, ReciboImpossivel):
-        # Outra execucao esta mexendo nas intencoes: ela mesma vai limpar.
-        pass
+    except (ItemTrancado, ReciboImpossivel) as e:
+        # Silenciar isso esconderia rascunho ficando no disco alem do prometido.
+        print("AVISO: nao deu para limpar conferencia vencida agora (%s). "
+              "Rode: python3 escrever.py limpar" % e.__class__.__name__,
+              file=sys.stderr)
 
 
 def esperar(segundos):
@@ -674,9 +676,14 @@ def _main():
             print("  %s  %s  %s" % (p["quando"], p["acao"], p["anuncio"]))
         return 0
     if len(sys.argv) > 1 and sys.argv[1] == "limpar":
+        # Apaga TODAS, nao so as vencidas: quem roda isso quer o rascunho fora
+        # do disco agora. Deixar as validas de pe faria o comando nao cumprir o
+        # que a skill promete. O custo e conferir de novo, que e barato.
         with trava_das_intencoes():
-            antes = len(_ler_intencoes())
-        print("Conferencias ainda validas: %d. As vencidas foram apagadas." % antes)
+            quantas = len(_ler_intencoes())
+            _gravar_intencoes({})
+        print("%d conferencia(s) apagada(s), inclusive as ainda validas." % quantas)
+        print("Para agir de novo, confira de novo — o codigo antigo nao serve mais.")
         return 0
     print(__doc__.strip().splitlines()[0])
     print("\nUso:  python3 escrever.py permissao")
