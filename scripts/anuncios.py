@@ -44,45 +44,109 @@ SUB_SITUACOES = {
 }
 
 
-def _num(v):
+def _num(v, minimo=None, maximo=None):
+    """Numero finito dentro do dominio esperado. Fora dele e DESCONHECIDO.
+
+    Visita negativa existia na resposta de teste e gerava conversao de -10%.
+    Numero fora do dominio nao e dado: e sinal de que a leitura nao vale.
+    """
     if isinstance(v, bool) or not isinstance(v, (int, float)):
         return None
     f = float(v)
-    return f if f == f and f not in (float("inf"), float("-inf")) else None
+    if f != f or f in (float("inf"), float("-inf")):
+        return None
+    if minimo is not None and f < minimo:
+        return None
+    if maximo is not None and f > maximo:
+        return None
+    return f
 
 
-def _inteiro(v):
+def _inteiro(v, minimo=None):
     if isinstance(v, bool) or not isinstance(v, int):
+        return None
+    if minimo is not None and v < minimo:
         return None
     return v
 
 
-def _vendas_da_janela():
-    """Le o arquivo do leitor de pedidos. Devolve (por_anuncio, periodo, dias)."""
-    d = contrato.carregar("prometheus-pedidos")
-    if not d:
-        return None, None, None
-    por_anuncio = {}
-    for pedido in (d.get("itens") or []):
-        for linha in (pedido.get("linhas") or []):
-            mlb = linha.get("mlb")
-            unidades = _inteiro(linha.get("unidades"))
-            preco = _num(linha.get("preco_unitario"))
-            if not mlb or unidades is None or preco is None:
-                continue
-            atual = por_anuncio.setdefault(mlb, {"unidades": 0, "faturamento": 0.0,
-                                                 "titulo": linha.get("titulo")})
-            atual["unidades"] += unidades
-            atual["faturamento"] = round(atual["faturamento"] + preco * unidades, 2)
+class ArquivoDePedidosNaoServe(Exception):
+    """O arquivo existe mas nao da para confiar nele para esta conta/janela."""
+
+
+def _conferir_pedidos(d, conta, hoje):
+    """O arquivo e de ARQUIVO: pode ser velho, de outra conta, ou de demonstracao.
+
+    Consumir sem conferir faz o resultado sair assinado com a conta conectada
+    carregando numero que nao e dela. Entao: contrato conhecido, mesma conta,
+    fonte real, e janela que termina hoje — porque as visitas so se pedem numa
+    janela que termina agora.
+    """
+    if not isinstance(d, dict):
+        raise ArquivoDePedidosNaoServe("o arquivo de pedidos não pôde ser lido")
+    if str(d.get("contrato")) != str(contrato.CONTRATO):
+        raise ArquivoDePedidosNaoServe(
+            "o arquivo de pedidos é de uma versão de contrato que este leitor não "
+            "conhece. Rode: python3 pedidos.py")
+    if d.get("skill") != "prometheus-pedidos":
+        raise ArquivoDePedidosNaoServe("o arquivo de pedidos não é do leitor de pedidos")
+    if d.get("fonte") != "api":
+        raise ArquivoDePedidosNaoServe(
+            "o arquivo de pedidos não veio da API (é demonstração ou planilha), "
+            "e misturar isso com visitas reais daria um número que não existe")
+    dono = (d.get("conta") or {}).get("id")
+    if dono != conta.get("id"):
+        raise ArquivoDePedidosNaoServe(
+            "o arquivo de pedidos é de outra conta. Rode: python3 pedidos.py")
     periodo = d.get("periodo") or {}
-    dias = None
     try:
         de = dt.date.fromisoformat(periodo.get("de"))
         ate = dt.date.fromisoformat(periodo.get("ate"))
-        dias = (ate - de).days + 1
     except (TypeError, ValueError):
-        dias = None
-    return por_anuncio, periodo, dias
+        raise ArquivoDePedidosNaoServe(
+            "o arquivo de pedidos não diz o período que cobre. Rode: python3 pedidos.py")
+    if ate != hoje:
+        raise ArquivoDePedidosNaoServe(
+            "o arquivo de pedidos é de %s e as visitas só podem ser pedidas numa "
+            "janela que termina hoje — dividir venda de um período por visita de "
+            "outro daria um número sem sentido. Rode: python3 pedidos.py" % ate)
+    if de > ate:
+        raise ArquivoDePedidosNaoServe("o período do arquivo de pedidos está invertido")
+    return periodo, (ate - de).days + 1
+
+
+def _vendas_da_janela(conta, hoje):
+    """Le e CONFERE o arquivo do leitor de pedidos."""
+    d = contrato.carregar("prometheus-pedidos")
+    if not d:
+        return None, None, None, None
+    periodo, dias = _conferir_pedidos(d, conta, hoje)
+    por_anuncio = {}
+    linhas_incompletas = 0
+    for pedido in (d.get("itens") or []):
+        for linha in (pedido.get("linhas") or []):
+            mlb = linha.get("mlb")
+            unidades = _inteiro(linha.get("unidades"), minimo=1)
+            preco = _num(linha.get("preco_unitario"), minimo=0)
+            if not mlb:
+                linhas_incompletas += 1
+                continue
+            atual = por_anuncio.setdefault(mlb, {"unidades": 0, "faturamento": 0.0,
+                                                 "titulo": linha.get("titulo"),
+                                                 "completo": True})
+            if unidades is None or preco is None:
+                # Linha incompleta NAO some: ela marca o anuncio como subtotal, se
+                # nao o faturamento de uma linha passa a representar o do anuncio
+                # inteiro — e isso tambem muda o ranking dos maiores.
+                atual["completo"] = False
+                linhas_incompletas += 1
+                continue
+            atual["unidades"] += unidades
+            atual["faturamento"] = round(atual["faturamento"] + preco * unidades, 2)
+    # Lacuna do produtor e lacuna aqui: faturamento parcial la nao vira total aqui.
+    pedidos_completo = bool((d.get("resumo") or {}).get("completo", True))
+    return por_anuncio, periodo, dias, {"linhas_incompletas": linhas_incompletas,
+                                        "pedidos_completo": pedidos_completo}
 
 
 def _dados_dos_anuncios(ids):
@@ -115,8 +179,13 @@ def _dados_dos_anuncios(ids):
     return por_id, nao_lidos
 
 
-def _visitas(mlb, dias):
-    """Visitas na janela, ou None. None NAO e zero: zero significa ninguem olhou."""
+def _visitas(mlb, dias, de):
+    """Visitas na janela, ou None. None NAO e zero: zero significa ninguem olhou.
+
+    Confere o periodo que a resposta diz ter coberto: pedir `last=N` devolve uma
+    janela movel que termina HOJE, e se ela nao cobrir o inicio da janela de
+    vendas, a divisao mistura periodos.
+    """
     try:
         d = meli.api("/items/%s/visits/time_window" % mlb,
                      {"last": dias, "unit": "day"})
@@ -124,7 +193,10 @@ def _visitas(mlb, dias):
         return None
     if not isinstance(d, dict):
         return None
-    return _inteiro(d.get("total_visits"))
+    inicio = str(d.get("date_from") or "")[:10]
+    if inicio and de and inicio > de:
+        return None
+    return _inteiro(d.get("total_visits"), minimo=0)
 
 
 def coletar(quantos=QUANTOS_PADRAO, hoje=None):
@@ -132,15 +204,11 @@ def coletar(quantos=QUANTOS_PADRAO, hoje=None):
     conta = meli.conta_conectada()
     hoje = hoje or dt.datetime.now(FUSO).date()
 
-    vendas, periodo, dias = _vendas_da_janela()
+    vendas, periodo, dias, origem = _vendas_da_janela(conta, hoje)
     if vendas is None:
-        raise meli.ErroDaAPI(
-            0, "rode primeiro o leitor de pedidos: e dele que vem quem vendeu "
-               "na janela. Comando: python3 pedidos.py")
-    if not dias:
-        raise meli.ErroDaAPI(
-            0, "o arquivo de pedidos nao diz o periodo que cobre, entao nao da "
-               "para pedir as visitas da mesma janela. Rode python3 pedidos.py de novo")
+        raise ArquivoDePedidosNaoServe(
+            "rode primeiro o leitor de pedidos: é dele que vem quem vendeu na "
+            "janela. Comando: python3 pedidos.py")
 
     ordenados = sorted(vendas.items(), key=lambda par: -par[1]["faturamento"])
     escolhidos = ordenados[:quantos]
@@ -151,11 +219,15 @@ def coletar(quantos=QUANTOS_PADRAO, hoje=None):
     itens = []
     sem_visita = 0
     sem_dado = 0
+    sem_estoque_conhecido = 0
+    sem_situacao = 0
+    sub_desconhecido = 0
+    parciais = 0
     for mlb, venda in escolhidos:
         anuncio = dados.get(mlb) or {}
         if not anuncio:
             sem_dado += 1
-        visitas = _visitas(mlb, dias)
+        visitas = _visitas(mlb, dias, periodo.get("de"))
         if visitas is None:
             sem_visita += 1
         unidades = venda["unidades"]
@@ -163,21 +235,33 @@ def coletar(quantos=QUANTOS_PADRAO, hoje=None):
         if visitas:
             conversao = round(100.0 * unidades / visitas, 2)
         situacao = SITUACOES.get(anuncio.get("status"))
-        sub = [SUB_SITUACOES[s] for s in (anuncio.get("sub_status") or [])
-               if s in SUB_SITUACOES]
-        estoque = _inteiro(anuncio.get("available_quantity"))
+        if anuncio and situacao is None:
+            sem_situacao += 1
+        crus = anuncio.get("sub_status")
+        sub = None
+        if isinstance(crus, list):
+            sub = [SUB_SITUACOES[s] for s in crus if s in SUB_SITUACOES]
+            if len(sub) != len(crus):
+                sub_desconhecido += 1
+                sub = None
+        estoque = _inteiro(anuncio.get("available_quantity"), minimo=0)
+        if anuncio and estoque is None:
+            sem_estoque_conhecido += 1
+        if not venda["completo"]:
+            parciais += 1
         itens.append({
             "mlb": mlb,
             "titulo": anuncio.get("title") or venda.get("titulo"),
             "faturamento": venda["faturamento"],
+            "faturamento_parcial": not venda["completo"],
             "vendas": unidades,
             "visitas": visitas,
             "conversao_pct": conversao,
-            "preco": _num(anuncio.get("price")),
+            "preco": _num(anuncio.get("price"), minimo=0),
             "estoque": estoque,
             "situacao": situacao,
             "alertas": sub,
-            "saude": _num(anuncio.get("health")),
+            "saude": _num(anuncio.get("health"), minimo=0, maximo=1),
         })
 
     faltando, lacunas, avisos = [], {}, []
@@ -187,28 +271,54 @@ def coletar(quantos=QUANTOS_PADRAO, hoje=None):
             faltando.append(campo)
         lacunas[campo] = porque
 
-    cobertura = not sem_visita and not sem_dado and not nao_lidos
-    conversoes = [i["conversao_pct"] for i in itens if i["conversao_pct"] is not None]
-    if not cobertura or not conversoes:
-        falta("conversao_mediana",
-              "nem todos os anúncios desta lista tiveram visitas ou dados lidos, "
-              "então uma mediana aqui falaria por quem não foi medido")
-        mediana = None
-    else:
+    # A mediana so vale se TODO anuncio da lista tiver conversao. Deixar de fora
+    # quem teve zero visita faria a mediana falar por quem nao foi medido.
+    conversoes = [i["conversao_pct"] for i in itens]
+    if itens and all(c is not None for c in conversoes):
         ordem = sorted(conversoes)
         meio = len(ordem) // 2
         mediana = (ordem[meio] if len(ordem) % 2
                    else round((ordem[meio - 1] + ordem[meio]) / 2.0, 2))
+    else:
+        mediana = None
+        falta("conversao_mediana",
+              "nem todos os anúncios desta lista têm conversão (faltou visita, "
+              "ou ninguém visitou), então uma mediana aqui falaria por quem não "
+              "foi medido")
+
+    if parciais or not origem["pedidos_completo"]:
+        falta("faturamento",
+              "o arquivo de pedidos tem linhas incompletas ou a coleta dele não "
+              "veio inteira, então o faturamento por anúncio é subtotal — e a "
+              "ordem dos maiores também pode mudar quando o que falta chegar")
+
+    if sem_estoque_conhecido or sem_dado or nao_lidos:
+        falta("sem_estoque",
+              "nem todo anúncio teve o estoque lido, então contar os zerados "
+              "daria um número menor do que a realidade")
+    if sem_situacao or sem_dado or nao_lidos:
+        falta("pausados",
+              "nem todo anúncio teve a situação lida ou reconhecida, então contar "
+              "os pausados daria um número menor do que a realidade")
+    if sub_desconhecido or sem_dado or nao_lidos:
+        falta("com_alerta",
+              "algum anúncio veio com um alerta que este pacote não conhece; "
+              "contar só os conhecidos esconderia o resto")
 
     if deixados:
         avisos.append("esta leitura olhou os %d anúncios que mais faturaram na janela; "
                       "outros %d venderam e ficaram de fora" % (len(escolhidos), deixados))
     if sem_visita:
-        avisos.append("%d anúncio(s) não tiveram as visitas lidas; a conversão deles "
-                      "fica vazia, não zerada" % sem_visita)
+        avisos.append("%d anúncio(s) não tiveram as visitas lidas, ou as visitas não "
+                      "cobriam a janela inteira; a conversão deles fica vazia, não "
+                      "zerada" % sem_visita)
     if nao_lidos or sem_dado:
         avisos.append("%d anúncio(s) não tiveram os dados lidos; preço, estoque e "
                       "situação deles ficam vazios" % max(nao_lidos, sem_dado))
+    if sub_desconhecido:
+        avisos.append("%d anúncio(s) têm um alerta que este pacote ainda não conhece; "
+                      "o campo fica vazio em vez de publicar o que veio da API"
+                      % sub_desconhecido)
 
     falta("custo_e_margem",
           "a API não tem o seu custo por SKU, então conversão boa não quer dizer "
@@ -220,12 +330,15 @@ def coletar(quantos=QUANTOS_PADRAO, hoje=None):
 
     itens.sort(key=lambda i: (i["conversao_pct"] is None, i["conversao_pct"] or 0))
 
+    def conta_se(condicao, campo):
+        return None if campo in faltando else sum(1 for i in itens if condicao(i))
+
     resumo = {
         "anuncios_olhados": len(itens),
         "conversao_mediana_pct": mediana,
-        "sem_estoque": sum(1 for i in itens if i["estoque"] == 0),
-        "pausados": sum(1 for i in itens if i["situacao"] == "pausado"),
-        "com_alerta": sum(1 for i in itens if i["alertas"]),
+        "sem_estoque": conta_se(lambda i: i["estoque"] == 0, "sem_estoque"),
+        "pausados": conta_se(lambda i: i["situacao"] == "pausado", "pausados"),
+        "com_alerta": conta_se(lambda i: bool(i["alertas"]), "com_alerta"),
         "janela_em_dias": dias,
     }
 
@@ -262,8 +375,8 @@ def _main():
     print("%-26s %d" % ("Anuncios olhados", r["anuncios_olhados"]))
     if r["conversao_mediana_pct"] is not None:
         print("%-26s %.2f%%" % ("Conversao mediana", r["conversao_mediana_pct"]))
-    print("%-26s %d" % ("Sem estoque", r["sem_estoque"]))
-    print("%-26s %d" % ("Pausados", r["pausados"]))
+    for rotulo, chave in (("Sem estoque", "sem_estoque"), ("Pausados", "pausados")):
+        print("%-26s %s" % (rotulo, "?" if r[chave] is None else r[chave]))
     print("")
     print("Os que mais recebem visita e menos vendem:")
     for i in d["itens"][:6]:
@@ -281,6 +394,8 @@ if __name__ == "__main__":
     try:
         sys.exit(_main())
     except (meli.SemAutorizacao, meli.CredenciaisIncompletas) as e:
+        sys.exit("PARADO: %s" % e)
+    except ArquivoDePedidosNaoServe as e:
         sys.exit("PARADO: %s" % e)
     except meli.ErroDaAPI as e:
         sys.exit("PARADO: %s" % e)
