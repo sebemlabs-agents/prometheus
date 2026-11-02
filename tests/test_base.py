@@ -1753,9 +1753,11 @@ def test_pedidos_fixa_a_janela_antes_da_primeira_chamada(pedidos_api):
 
 
 def test_pedidos_teto_de_paginas_avisa_sem_dizer_quantos_ficaram(pedidos_api):
-    cheias = [[_pedido("p%d-%d" % (n, i)) for i in range(50)] for n in range(30)]
+    # O teto e argumento, entao o teste fixa o dele em vez de depender do padrao:
+    # o padrao muda quando a conta cresce, o comportamento nao.
+    cheias = [[_pedido("p%d-%d" % (n, i)) for i in range(50)] for n in range(5)]
     pedidos_api(cheias)
-    d = pedidos.coletar(hoje=HOJE)
+    d = pedidos.coletar(hoje=HOJE, teto=3)
     assert d["resumo"]["completo"] is False
     texto = " ".join(d["avisos"]).lower()
     assert "incompleta" in texto

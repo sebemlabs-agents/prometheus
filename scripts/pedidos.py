@@ -31,9 +31,14 @@ import sys
 import contrato
 import meli
 
-JANELA_PADRAO = 60
+# Medido contra conta real em 02/11/2026: com 60 dias e teto de 20 paginas, uma
+# conta ativa ESTOURA — 919 pedidos pagos, coleta incompleta, e os dois melhores
+# numeros (comissao e ticket medio) somem porque viram subtotal. A primeira coisa
+# que o vendedor veria seria uma lacuna. Entao: janela menor por padrao, teto
+# maior para aguentar quem vende muito.
+JANELA_PADRAO = 30
 POR_PAGINA = 50
-MAX_PAGINAS = 20
+MAX_PAGINAS = 40
 FUSO = dt.timezone(dt.timedelta(hours=-3))
 
 # Enquanto a unidade da tarifa nao for confirmada contra pedido real, o total nao

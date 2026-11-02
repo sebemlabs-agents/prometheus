@@ -41,6 +41,8 @@ SUB_SITUACOES = {
     "out_of_stock": "sem estoque",
     "waiting_for_patch": "esperando correção",
     "picture_download_pending": "imagem pendente",
+    # Vistos na conta real em 02/11/2026:
+    "forbidden": "bloqueado pelo Mercado Livre",
 }
 
 
