@@ -23,6 +23,20 @@
 > 4. anotar a mudança aqui embaixo
 > 5. publicar pelo Cypher Guard
 
+## 1.6.2 — 2 de novembro de 2026
+
+**Só texto: o pacote passou a dizer o que é.**
+
+> Prometeu roubou o fogo dos deuses e entregou aos homens. Aqui o fogo está com os robôs: os
+> seus dados de Mercado Livre, Shopee e Olist, do outro lado da API, que hoje você só enxerga
+> pelo painel de quem fez o painel.
+
+A descrição antiga listava função. Esta diz por que o pacote existe — e deixa escrito o que
+vem depois: **ações aprovadas por você, rotinas e agentes.** Quando chegarem, vêm marcadas; as
+skills de leitura nunca escrevem.
+
+Nenhuma mudança de comportamento, nenhum teste alterado.
+
 ## 1.6.1 — 2 de novembro de 2026
 
 **A janela padrão das vendas passou de 60 para 30 dias, e o teto de leitura dobrou.**

@@ -1,7 +1,21 @@
 # prometheus
 
-Pacote de skills que conecta a sua conta do Mercado Livre **em somente leitura** e transforma
-os dados em decisão: promoções terminando, dinheiro a receber, conteúdo de produto e mais.
+> Prometeu roubou o fogo dos deuses e entregou aos homens.
+>
+> Aqui o fogo está com os robôs: **os seus dados** de Mercado Livre, Shopee e Olist, do outro
+> lado da API, que hoje você só enxerga pelo painel de quem fez o painel.
+
+Este pacote traz o fogo para a sua máquina. Quanto você vendeu e o que cada venda deixou de
+comissão; quais promoções terminam hoje e quantos anúncios ficaram de fora; o que está aberto
+contra você e quem está esperando resposta; e, de quem olhou o seu anúncio, quantos
+compraram.
+
+**Só leitura.** A credencial nunca sai do seu computador, e todo número vem com a regra de
+contagem do lado — porque número sem regra não dá para conferir com nada.
+
+**Já nasce pronto para o próximo passo:** ações aprovadas por você, rotinas que rodam sozinhas
+e agentes trabalhando com os seus dados. Quando chegarem, vão vir marcadas — as skills de
+leitura nunca escrevem.
 
 Feito para o **Claude**, instalado com um comando ou pelo menu. **Roda no Codex também** —
 com duas diferenças: lá não existe menu, e a atualização é manual

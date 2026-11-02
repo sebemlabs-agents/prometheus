@@ -1,7 +1,7 @@
 {
   "name": "prometheus",
-  "version": "1.6.1",
-  "description": "Lê sua conta do Mercado Livre e monta um painel local — só leitura, nada na sua conta é alterado. Também lê as suas planilhas, de qualquer formato, para o que a API não tem. Novas skills chegam na atualização, sem reinstalar.",
+  "version": "1.6.2",
+  "description": "Prometeu roubou o fogo dos deuses e entregou aos homens. Aqui o fogo está com os robôs: os seus dados de Mercado Livre, Shopee e Olist, que hoje você só enxerga pelo painel de quem fez o painel. Este pacote traz o fogo para a sua máquina — só leitura, credencial que nunca sai do seu computador, e número que sempre diz como foi contado. Já nasce pronto para o próximo passo: ações aprovadas por você, rotinas e agentes trabalhando com os seus dados.",
   "author": {
     "name": "Elo"
   },
