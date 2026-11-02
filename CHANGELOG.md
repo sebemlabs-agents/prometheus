@@ -23,6 +23,49 @@
 > 4. anotar a mudança aqui embaixo
 > 5. publicar pelo Cypher Guard
 
+## prometheus-acoes 1.0.0 — 2 de novembro de 2026
+
+**Um segundo pacote, e ele muda coisa na conta.** `prometheus` continua só leitura. Quem
+quiser que o pacote aja instala `prometheus-acoes` — e instalar é uma decisão, não um detalhe.
+
+Duas ações, uma por vez, sempre num anúncio só:
+
+- **`prometheus-aderir-promocao`** — adere um anúncio a uma campanha, e sai dela. Muda o
+  **preço de venda**.
+- **`prometheus-responder-pergunta`** — publica um **texto público** na página do anúncio.
+
+**A trava do pacote de leitura não foi tocada.** `meli.py` continua recusando qualquer coisa
+que não seja consulta, antes de sair da máquina, e nenhum leitor importa o módulo de escrita —
+teste garante. Os scripts de escrita **não moram** no pacote de leitura: quem instalou só o
+`prometheus` não consegue escrever nem copiando arquivo.
+
+O que a porta de escrita faz de diferente de um `urlopen`:
+
+- **lista fechada de ações**, cada uma com o seu método, o padrão de caminho que aceita e o
+  **nome exato** do escopo granular de que precisa. Ter "alguma" permissão de escrita não serve:
+  `ads:/read-write` não autoriza mexer em promoção;
+- **sem redirecionamento** (`seguro.abrir`): seguir um 302 entregaria o token ao destino de
+  outra pessoa;
+- **recibo antes do envio**, em `acoes.txt`. Não deu para gravar, a ação não acontece;
+- **escrita não repete.** Uma exceção, e só ela: `OFFER_SIBLING_CREATION_IN_PROCESS`, em que o
+  próprio Meli diz que não aplicou — aí espera 20s, **relê** e repete uma vez;
+- **resposta perdida tranca o anúncio** até alguém reconciliar por leitura. Repetir às cegas é
+  o jeito de aplicar duas vezes.
+
+Conferir vem antes de fazer, e a conferência **vence**: o código vale 10 minutos, uma vez, só
+naquela conta — e o `--fazer` **relê o estado vivo e compara** antes de enviar.
+
+Três coisas que o dado real ensinou e que estão no código:
+
+- **o preço de hoje vem do anúncio, não do candidato.** No candidato da promoção, `price` é o
+  preço *na campanha*; no anúncio, `price` é o *praticado*. Mesmo nome, significados invertidos;
+- **`201` não é prova.** A ferramenta espera ~15s e relê, conferindo estado **e** preço. `200`
+  numa saída com `errors` no corpo não é saída, e `404` é resultado a reconciliar;
+- **só `SELLER_CAMPAIGN`** tem adesão provada aqui. Outro tipo é recusado **com nome**. Sair
+  funciona em qualquer tipo — o caminho de volta não fica fechado.
+
+Spec, com a matriz de 30 garantias: `elo/docs/imersao-v2/spec-escrita.md`.
+
 ## 1.7.0 — 2 de novembro de 2026
 
 **Agora dá para trocar a URL de retorno depois, sem refazer a pasta.**
