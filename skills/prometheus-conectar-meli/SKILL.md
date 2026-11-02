@@ -302,6 +302,20 @@ Ele responde apenas "preenchido" ou "VAZIO" por campo, sem mostrar valor.
 
 Se a conta for de outro país, o passo 1 aceita o site: `python3 autorizar.py --site MLA`.
 
+**Se a pessoa travar na hora de copiar o código**, existe uma página de socorro:
+`https://prometheus.sebemlabs.com.br/`. Ela mostra a URL pronta com botão de copiar, em vez
+da página de erro. **Não é o caminho padrão** — o padrão é a `.invalid`, que é o que a
+gravação do nivelamento mostra. Para usar a página:
+
+1. a pessoa **acrescenta** essa URL no DevCenter, sem tirar a `.invalid`;
+2. `python3 pasta.py --trocar-uri https://prometheus.sebemlabs.com.br/`;
+3. refaz a etapa 5.
+
+**Medido em 02/11/2026, e vale dizer para ela:** trocar a URL de retorno **não** derruba a
+conexão que já existe — a URL só é usada no momento de autorizar. Já mudar **permissão** no
+DevCenter exige autorizar de novo: o escopo fica gravado no acesso, e sem reautorizar a
+chamada volta `403 PolicyAgent`.
+
 Qualquer erro aqui: `references/problemas.md`.
 
 ### 6. O primeiro painel
@@ -403,6 +417,8 @@ offline. Sem isso ela vai ter que refazer a autorização a cada poucas horas, e
 | O usuário diz | Rode |
 |---|---|
 | "está conectado?" | `python3 meli.py check` e `python3 meli.py me` |
+| "quero trocar a URL de retorno" | `python3 pasta.py --trocar-uri <url>` |
+| "mudei as permissões no DevCenter" | `python3 autorizar.py` — **escopo novo só vale depois de autorizar de novo** |
 | "qual conta está conectada?" | `python3 meli.py me` |
 | "atualiza o painel" | `python3 painel.py` |
 | "reconectar", erro 401 ou 403, `invalid_grant` | etapa 5 de novo (e a 4, se o Secret mudou) |

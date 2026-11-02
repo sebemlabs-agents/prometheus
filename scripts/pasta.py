@@ -14,6 +14,7 @@ Compatibilidade: Python 3.8+.
 """
 import os
 import sys
+from urllib.parse import urlparse
 from pathlib import Path
 
 from seguro import fechado, gravar_protegido  # noqa: F401 (reexporta)
@@ -277,9 +278,73 @@ def preparar(caminho=None, nome=None):
             "acrescentados": acrescentados, "uri": uri}
 
 
+def trocar_uri(nova, caminho=None):
+    """Troca SO a linha da URL de retorno no credenciais.txt que ja existe.
+
+    Existe porque nao havia caminho suportado para isso: o assistente nao pode
+    ler o arquivo, e o `preparar` so grava a URL quando cria. Quem precisava
+    mudar — porque errou, porque vai usar outra pagina de retorno, ou porque
+    mexeu nos escopos — ficava sem saida.
+
+    Trabalha em BYTES e grava com a mesma protecao do resto: o arquivo tem
+    segredo nas outras linhas, e ler como texto e gravar de volta pode estragar
+    o que estava la.
+    """
+    nova = (nova or "").strip()
+    if not nova.lower().startswith("https://"):
+        raise ValueError("a URL de retorno precisa comecar com https://")
+    partes = urlparse(nova)
+    if not partes.netloc or any(c.isspace() for c in nova):
+        raise ValueError("essa URL nao parece valida: %r" % nova)
+
+    arquivo = Path(caminho or BASE) / "credenciais.txt"
+    if not arquivo.exists():
+        raise ValueError("nao achei credenciais.txt nesta pasta. Rode pasta.py antes.")
+
+    bruto = arquivo.read_bytes()
+    linhas = bruto.split(b"\n")
+    anterior = None
+    for i, linha in enumerate(linhas):
+        if linha.startswith(b"MELI_REDIRECT_URI="):
+            anterior = linha[len(b"MELI_REDIRECT_URI="):].decode("utf-8", "replace").strip()
+            linhas[i] = b"MELI_REDIRECT_URI=" + nova.encode("utf-8")
+            break
+    else:
+        raise ValueError("nao achei a linha MELI_REDIRECT_URI no credenciais.txt")
+
+    relato = gravar_protegido(arquivo, b"\n".join(linhas).decode("utf-8"))
+    tokens = (Path(caminho or BASE) / "tokens.json").exists()
+    return {"anterior": anterior, "nova": nova, "conectado": tokens,
+            "protegido": relato.get("protegido", True)}
+
+
 def _main():
     nome = None
     args = sys.argv[1:]
+    if "--trocar-uri" in args:
+        pos = args.index("--trocar-uri")
+        if pos + 1 >= len(args):
+            print("Uso: python3 pasta.py --trocar-uri https://seu-endereco/")
+            return 2
+        try:
+            r = trocar_uri(args[pos + 1])
+        except ValueError as e:
+            print("PARADO: %s" % e)
+            return 1
+        print("URL de retorno trocada.")
+        print("  antes : %s" % r["anterior"])
+        print("  agora : %s" % r["nova"])
+        print("")
+        print("Cadastre essa MESMA url no DevCenter, identica, antes de autorizar de novo.")
+        if r["conectado"]:
+            print("")
+            print("A conexao que ja existe CONTINUA VALENDO: a URL de retorno so e usada")
+            print("na hora de autorizar. Trocar a URL nao derruba o acesso atual.")
+            print("")
+            print("Se o que voce mudou foi PERMISSAO no DevCenter, aí e diferente: o")
+            print("escopo fica gravado no acesso, e so vale depois de autorizar de novo.")
+            print("  python3 autorizar.py")
+        return 0
     if args and args[0] in ("-h", "--help"):
         print(__doc__)
         return 0
