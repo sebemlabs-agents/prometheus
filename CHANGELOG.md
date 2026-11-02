@@ -23,6 +23,25 @@
 > 4. anotar a mudança aqui embaixo
 > 5. publicar pelo Cypher Guard
 
+## 1.6.1 — 2 de novembro de 2026
+
+**A janela padrão das vendas passou de 60 para 30 dias, e o teto de leitura dobrou.**
+
+Achado num ensaio cronometrado contra uma conta de verdade: com 60 dias, uma conta ativa
+estourava o teto de páginas. O resultado vinha marcado como incompleto — corretamente — e os
+dois melhores números, **comissão e ticket médio, desapareciam**, porque viravam subtotal e
+subtotal não é apresentado como total.
+
+Ou seja: a primeira coisa que um vendedor ativo veria ao rodar a skill era um faturamento
+parcial e uma comissão vazia. O programa estava certo; **o padrão é que estava errado.**
+
+Na mesma conta, com o padrão novo: 717 pedidos, nada faltando, comissão fechando em cima.
+Quem quiser mais janela continua pedindo com `--janela`.
+
+**Também:** um alerta de anúncio que aparecia na conta real e o pacote não conhecia
+(`forbidden`, bloqueio do Mercado Livre) entrou na tradução — antes ele deixava o contador de
+alertas vazio.
+
 ## 1.6.0 — 2 de novembro de 2026
 
 **Skill nova: `prometheus-anuncios`.** A pergunta que o painel do Mercado Livre não responde
