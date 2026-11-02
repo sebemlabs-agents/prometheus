@@ -2287,9 +2287,17 @@ def test_devolucoes_mediador_e_um_terceiro_papel(reclamacoes_api):
 
 # ------------------------------------------------------------ prometheus-anuncios
 
-def _pedidos_gravados(linhas, de="2026-10-02", ate="2026-10-31"):
-    return {"periodo": {"de": de, "ate": ate},
-            "itens": [{"linhas": linhas}]}
+HOJE_A = dt.date(2026, 11, 2)
+
+
+def _pedidos_gravados(linhas, de="2026-10-04", ate="2026-11-02", **troca):
+    d = {"contrato": contrato.CONTRATO, "skill": "prometheus-pedidos", "fonte": "api",
+         "conta": {"id": 7, "apelido": "LOJA", "site": "MLB"},
+         "periodo": {"de": de, "ate": ate},
+         "resumo": {"completo": True},
+         "itens": [{"linhas": linhas}]}
+    d.update(troca)
+    return d
 
 
 @pytest.fixture
@@ -2334,15 +2342,82 @@ def _corpo(mlb, **extra):
 
 def test_anuncios_sem_o_arquivo_de_pedidos_diz_o_que_fazer(anuncios_api):
     anuncios_api(None)
-    with pytest.raises(anuncios.meli.ErroDaAPI) as erro:
-        anuncios.coletar()
+    with pytest.raises(anuncios.ArquivoDePedidosNaoServe) as erro:
+        anuncios.coletar(hoje=HOJE_A)
     assert "pedidos.py" in str(erro.value)
+
+
+def test_anuncios_recusa_pedidos_de_outra_conta(anuncios_api):
+    # O Codex reproduziu: arquivo da conta 99 saindo assinado como conta 7.
+    anuncios_api(_pedidos_gravados([{"mlb": "MLB1", "unidades": 1, "preco_unitario": 10.0}],
+                                   conta={"id": 99, "apelido": "OUTRA", "site": "MLB"}))
+    with pytest.raises(anuncios.ArquivoDePedidosNaoServe) as erro:
+        anuncios.coletar(hoje=HOJE_A)
+    assert "outra conta" in str(erro.value)
+
+
+def test_anuncios_recusa_pedidos_de_demonstracao(anuncios_api):
+    anuncios_api(_pedidos_gravados([{"mlb": "MLB1", "unidades": 1, "preco_unitario": 10.0}],
+                                   fonte="demo"))
+    with pytest.raises(anuncios.ArquivoDePedidosNaoServe):
+        anuncios.coletar(hoje=HOJE_A)
+
+
+def test_anuncios_recusa_pedidos_de_ontem(anuncios_api):
+    # Visita so se pede em janela que termina hoje: dividir venda de um periodo
+    # por visita de outro da um numero sem sentido.
+    anuncios_api(_pedidos_gravados([{"mlb": "MLB1", "unidades": 1, "preco_unitario": 10.0}],
+                                   ate="2026-11-01"))
+    with pytest.raises(anuncios.ArquivoDePedidosNaoServe) as erro:
+        anuncios.coletar(hoje=HOJE_A)
+    assert "termina hoje" in str(erro.value)
+
+
+def test_anuncios_linha_incompleta_marca_subtotal_em_vez_de_sumir(anuncios_api):
+    anuncios_api(_pedidos_gravados([{"mlb": "MLB1", "unidades": 2, "preco_unitario": 10.0},
+                                    {"mlb": "MLB1", "unidades": None,
+                                     "preco_unitario": 10.0}]),
+                 corpos=[_corpo("MLB1")], visitas={"MLB1": 100})
+    d = anuncios.coletar(hoje=HOJE_A)
+    assert d["itens"][0]["faturamento_parcial"] is True
+    assert "faturamento" in d["faltando"]
+
+
+def test_anuncios_visita_negativa_nao_vira_conversao_negativa(anuncios_api):
+    anuncios_api(_pedidos_gravados([{"mlb": "MLB1", "unidades": 1, "preco_unitario": 10.0}]),
+                 corpos=[_corpo("MLB1")], visitas={"MLB1": -10})
+    d = anuncios.coletar(hoje=HOJE_A)
+    assert d["itens"][0]["visitas"] is None
+    assert d["itens"][0]["conversao_pct"] is None
+
+
+def test_anuncios_estoque_desconhecido_nao_vira_contador_zero(anuncios_api):
+    anuncios_api(_pedidos_gravados([{"mlb": "MLB1", "unidades": 1, "preco_unitario": 10.0}]),
+                 corpos=[_corpo("MLB1", available_quantity=None, status="inventado",
+                                sub_status=["novo"])],
+                 visitas={"MLB1": 100})
+    d = anuncios.coletar(hoje=HOJE_A)
+    assert d["resumo"]["sem_estoque"] is None
+    assert d["resumo"]["pausados"] is None
+    assert d["resumo"]["com_alerta"] is None
+
+
+def test_anuncios_mediana_exige_conversao_de_todos(anuncios_api):
+    # Um com zero visita e outro com 1%: publicar 1% seria falar pelos dois.
+    linhas = [{"mlb": "MLB1", "unidades": 1, "preco_unitario": 10.0},
+              {"mlb": "MLB2", "unidades": 1, "preco_unitario": 9.0}]
+    anuncios_api(_pedidos_gravados(linhas),
+                 corpos=[_corpo("MLB1"), _corpo("MLB2")],
+                 visitas={"MLB1": 100, "MLB2": 0})
+    d = anuncios.coletar(hoje=HOJE_A)
+    assert d["resumo"]["conversao_mediana_pct"] is None
+    assert "conversao_mediana" in d["faltando"]
 
 
 def test_anuncios_calcula_conversao_por_unidade(anuncios_api):
     anuncios_api(_pedidos_gravados([{"mlb": "MLB1", "unidades": 5, "preco_unitario": 100.0}]),
                  corpos=[_corpo("MLB1")], visitas={"MLB1": 1000})
-    d = anuncios.coletar()
+    d = anuncios.coletar(hoje=HOJE_A)
     assert d["itens"][0]["conversao_pct"] == 0.5
     assert d["resumo"]["janela_em_dias"] == 30
 
@@ -2350,7 +2425,7 @@ def test_anuncios_calcula_conversao_por_unidade(anuncios_api):
 def test_anuncios_sem_visita_nao_vira_conversao_zero(anuncios_api):
     anuncios_api(_pedidos_gravados([{"mlb": "MLB1", "unidades": 5, "preco_unitario": 100.0}]),
                  corpos=[_corpo("MLB1")], visitas={})
-    d = anuncios.coletar()
+    d = anuncios.coletar(hoje=HOJE_A)
     assert d["itens"][0]["visitas"] is None
     assert d["itens"][0]["conversao_pct"] is None
     assert d["resumo"]["conversao_mediana_pct"] is None
@@ -2359,7 +2434,7 @@ def test_anuncios_sem_visita_nao_vira_conversao_zero(anuncios_api):
 def test_anuncios_zero_visita_nao_divide_por_zero(anuncios_api):
     anuncios_api(_pedidos_gravados([{"mlb": "MLB1", "unidades": 5, "preco_unitario": 100.0}]),
                  corpos=[_corpo("MLB1")], visitas={"MLB1": 0})
-    d = anuncios.coletar()
+    d = anuncios.coletar(hoje=HOJE_A)
     assert d["itens"][0]["visitas"] == 0
     assert d["itens"][0]["conversao_pct"] is None
 
@@ -2369,7 +2444,7 @@ def test_anuncios_situacao_desconhecida_nao_e_publicada(anuncios_api):
                  corpos=[_corpo("MLB1", status="situacao_inventada",
                                 sub_status=["coisa_nova"])],
                  visitas={"MLB1": 100})
-    d = anuncios.coletar()
+    d = anuncios.coletar(hoje=HOJE_A)
     bruto = json.dumps(d, ensure_ascii=False)
     assert "situacao_inventada" not in bruto
     assert "coisa_nova" not in bruto
@@ -2379,24 +2454,28 @@ def test_anuncios_situacao_desconhecida_nao_e_publicada(anuncios_api):
 def test_anuncios_item_que_nao_veio_no_lote_nao_some_calado(anuncios_api):
     anuncios_api(_pedidos_gravados([{"mlb": "MLB1", "unidades": 1, "preco_unitario": 10.0}]),
                  corpos=[None], visitas={"MLB1": 100})
-    d = anuncios.coletar()
+    d = anuncios.coletar(hoje=HOJE_A)
     assert d["itens"][0]["preco"] is None
     assert any("não tiveram os dados lidos" in a for a in d["avisos"])
-    assert d["resumo"]["conversao_mediana_pct"] is None
+    # A mediana e de CONVERSAO, que vem de visita e venda: o lote nao mexe nela.
+    # Quem fica vazio e o que depende do lote.
+    assert d["resumo"]["conversao_mediana_pct"] == 1.0
+    assert d["resumo"]["sem_estoque"] is None
+    assert d["resumo"]["pausados"] is None
 
 
 def test_anuncios_falha_no_primeiro_lote_sobe(anuncios_api):
     anuncios_api(_pedidos_gravados([{"mlb": "MLB1", "unidades": 1, "preco_unitario": 10.0}]),
                  erro_lote=True)
     with pytest.raises(anuncios.meli.ErroDaAPI):
-        anuncios.coletar()
+        anuncios.coletar(hoje=HOJE_A)
 
 
 def test_anuncios_lote_fora_do_formato_sobe(anuncios_api):
     anuncios_api(_pedidos_gravados([{"mlb": "MLB1", "unidades": 1, "preco_unitario": 10.0}]),
                  lote_invalido=True)
     with pytest.raises(anuncios.meli.ErroDaAPI):
-        anuncios.coletar()
+        anuncios.coletar(hoje=HOJE_A)
 
 
 def test_anuncios_diz_quantos_ficaram_de_fora(anuncios_api):
@@ -2405,7 +2484,7 @@ def test_anuncios_diz_quantos_ficaram_de_fora(anuncios_api):
     anuncios_api(_pedidos_gravados(linhas),
                  corpos=[_corpo("MLB5"), _corpo("MLB4")],
                  visitas={"MLB5": 100, "MLB4": 100})
-    d = anuncios.coletar(quantos=2)
+    d = anuncios.coletar(quantos=2, hoje=HOJE_A)
     assert d["resumo"]["anuncios_olhados"] == 2
     assert any("ficaram de fora" in a for a in d["avisos"])
 
@@ -2416,13 +2495,13 @@ def test_anuncios_ordena_do_pior_para_o_melhor_convertedor(anuncios_api):
     anuncios_api(_pedidos_gravados(linhas),
                  corpos=[_corpo("MLB2"), _corpo("MLB1")],
                  visitas={"MLB1": 1000, "MLB2": 1000})
-    d = anuncios.coletar()
+    d = anuncios.coletar(hoje=HOJE_A)
     assert [i["mlb"] for i in d["itens"]] == ["MLB1", "MLB2"]
 
 
 def test_anuncios_a_janela_vem_do_arquivo_de_pedidos(anuncios_api):
     anuncios_api(_pedidos_gravados([{"mlb": "MLB1", "unidades": 1, "preco_unitario": 10.0}],
-                                   de="2026-10-01", ate="2026-10-07"),
+                                   de="2026-10-27", ate="2026-11-02"),
                  corpos=[_corpo("MLB1")], visitas={"MLB1": 100})
-    d = anuncios.coletar()
+    d = anuncios.coletar(hoje=HOJE_A)
     assert d["resumo"]["janela_em_dias"] == 7
