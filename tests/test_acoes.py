@@ -1176,3 +1176,63 @@ def test_limpar_apaga_tambem_a_conferencia_valida(pasta, capsys):
     with pytest.raises(escrever.ConferenciaInvalida):
         escrever.consumir_intencao(cod)
     assert "rascunho" not in (pasta / "intencoes.json").read_text(encoding="utf-8")
+
+
+# ============== o que SO a conta real mostrou (02/11, antes da chamada real)
+
+# Payload exato da conta real, 02/11/2026, GET /seller-promotions/items/MLB...
+REAL = [
+    {"type": "PRICE_DISCOUNT", "status": "candidate", "price": 0,
+     "original_price": 899.97, "name": "", "min_discounted_price": 180,
+     "max_discounted_price": 854.97, "suggested_discounted_price": 854.97},
+    {"id": "C-MLB5993270", "type": "SELLER_CAMPAIGN", "sub_type": "FLEXIBLE_PERCENTAGE",
+     "status": "candidate", "price": 0, "original_price": 899.97,
+     "name": "OUTUBRO", "min_discounted_price": 180,
+     "max_discounted_price": 854.97, "suggested_discounted_price": 854.97},
+]
+
+
+def test_registro_sem_id_e_legitimo_price_discount_nao_leitura_quebrada(pasta, monkeypatch):
+    """PRICE_DISCOUNT vem SEM `id` na conta real. Exigir id recusava leitura boa."""
+    monkeypatch.setattr(promover.meli, "api", lambda c, p=None: list(REAL))
+    assert len(promover.candidatos("MLB6847613022")) == 2
+
+
+def test_price_zero_deste_endereco_nunca_vira_preco_proposto(pasta):
+    """Terceiro significado de `price` na mesma API: aqui ele vem 0 em todos os
+    candidatos. Usar como alternativa poria o anuncio a R$ 0,00."""
+    so_price = {"type": "SELLER_CAMPAIGN", "status": "candidate", "price": 0,
+                "original_price": 899.97}
+    assert promover._preco_proposto(so_price) == (None, None)
+
+
+def test_preco_proposto_vem_do_campo_sugerido(pasta):
+    assert promover._preco_proposto(REAL[1])[0] == 854.97
+
+
+def test_conferir_no_payload_real_mostra_os_dois_precos(pasta, monkeypatch, capsys):
+    def api(caminho, params=None):
+        if caminho.startswith("/items/"):
+            return {"id": "MLB6847613022", "price": 899.97, "status": "active"}
+        return list(REAL)
+
+    monkeypatch.setattr(promover.meli, "api", api)
+    monkeypatch.setattr(escrever, "esperar", lambda s: None)
+    promover.conferir("aderir", "MLB6847613022", "C-MLB5993270")
+    saida = capsys.readouterr().out
+    assert "hoje R$ 899,97" in saida
+    assert "na campanha R$ 854,97" in saida
+
+
+def test_proposto_abaixo_do_minimo_da_campanha_nao_sai(pasta, monkeypatch):
+    quebrado = dict(REAL[1], suggested_discounted_price=100.0)  # minimo e 180
+
+    def api(caminho, params=None):
+        if caminho.startswith("/items/"):
+            return {"id": "MLB1", "price": 899.97, "status": "active"}
+        return [quebrado]
+
+    monkeypatch.setattr(promover.meli, "api", api)
+    with pytest.raises(promover.NaoDaParaFazer) as e:
+        promover.conferir("aderir", "MLB1", "C-MLB5993270")
+    assert "minimo" in str(e.value)
