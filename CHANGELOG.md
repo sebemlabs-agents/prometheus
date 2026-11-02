@@ -23,6 +23,36 @@
 > 4. anotar a mudança aqui embaixo
 > 5. publicar pelo Cypher Guard
 
+## 1.5.0 — 2 de novembro de 2026
+
+**Skill nova: `prometheus-devolucoes`.** As reclamações abertas da sua conta — por causa, por
+etapa, e quais estão esperando você responder. Em mediação, silêncio do vendedor costuma
+decidir a favor do comprador, então esse é o número que abre o bloco.
+
+**A armadilha que ela resolve.** A API manda, junto do motivo, um campo que parece ser a
+descrição e não é: ele traz a resposta do comprador a uma pergunta anterior. **Quatro causas
+completamente diferentes compartilham a frase "Chegou bem"** — produto quebrado, produto que
+não funciona, faltaram acessórios e faltou item. Quem agrupa por ali vê um balde que não diz
+nada e perde justamente a informação que permite consertar. O pacote usa a causa real.
+
+Cada reclamação também é marcada como problema de **produto** ou de **entrega**. São consertos
+diferentes: um é fornecedor, embalagem e descrição do anúncio; o outro é logística e prazo.
+
+**O texto das mensagens não é gravado, de propósito.** O arquivo vira painel, e painel se
+compartilha com a equipe — mensagem de comprador num link compartilhado é dado pessoal
+exposto. O que fica é o sinal: quantas mensagens, **quem falou por último** — o comprador,
+você, ou o mediador do Mercado Livre —, há quantos dias, e se a conversa tem anexo. Para ler
+o que o comprador escreveu, peça a conversa daquela reclamação e ela aparece na tela, sem
+ser gravada.
+
+**O que esta skill não sabe:** a sua taxa de reclamação. Ela exige o histórico fechado
+inteiro, que numa conta ativa passa de milhares de registros — pesado demais para uma coleta
+ao vivo. O que está aqui é o que está **aberto agora**.
+
+**Regra que ficou mais dura em todo o pacote:** valor que veio da API e que o programa não
+reconhece **não é publicado**. Fica vazio, com aviso. Um campo que deveria trazer um papel
+pode trazer um nome, e o arquivo vira tela compartilhada.
+
 ## 1.4.0 — 2 de novembro de 2026
 
 **A fila de promoções passa a dizer a verdade sobre o que está dentro.** A skill existia desde
