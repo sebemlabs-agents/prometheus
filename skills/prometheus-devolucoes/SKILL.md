@@ -43,8 +43,12 @@ O arquivo vira painel, e painel se compartilha com a equipe. Mensagem de comprad
 compartilhado é vazamento de dado pessoal.
 
 O que fica no arquivo é o sinal, sem texto: **quantas mensagens, quem falou por último, há
-quantos dias o comprador espera, e se ele mandou foto.** Foto costuma ser prova anexada, e
-pesa na mediação.
+quantos dias o comprador espera, e se a conversa tem anexo.**
+
+Quem fala são três, não dois: o comprador, você, e **o mediador do Mercado Livre**. Os três
+aparecem separados, e **mediador com a última palavra não é tratado como "esperando você"** —
+pode ser pedido de documento, pode ser decisão final, e afirmar seria chute. O número fica do
+lado, para você olhar.
 
 **Quando o usuário quiser ler o que o comprador escreveu**, busque a conversa **daquela
 reclamação** na hora, mostre na tela e **não grave**:
