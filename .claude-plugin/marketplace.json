@@ -18,6 +18,21 @@
         "painel"
       ],
       "displayName": "Prometheus"
+    },
+    {
+      "name": "prometheus-acoes",
+      "source": "./acoes",
+      "description": "NÃO é este que conecta a sua conta — para conectar, instale o Prometheus. Este é o complemento que MUDA COISA na conta: adere um anúncio a uma campanha (e sai dela) e publica resposta a pergunta. Uma ação por vez, o antes e o depois na tela antes de enviar, código de confirmação que vence em 10 minutos, e recibo de tudo. Exige permissão de escrita na autorização do seu aplicativo; com aplicativo só de leitura, ele recusa antes de sair da sua máquina.",
+      "license": "MIT",
+      "keywords": [
+        "mercado-livre",
+        "marketplace",
+        "ecommerce",
+        "promocoes",
+        "escrita",
+        "complemento"
+      ],
+      "displayName": "Prometheus — Ações (complemento: NÃO conecta a conta)"
     }
   ]
 }

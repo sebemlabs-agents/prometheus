@@ -23,6 +23,24 @@
 > 4. anotar a mudança aqui embaixo
 > 5. publicar pelo Cypher Guard
 
+## 1.8.2 — 6 de novembro de 2026
+
+**Desfaz a 1.8.1: o pacote de Ações volta para a lista, agora com nome que não se confunde.**
+
+Tirar ele da lista, na 1.8.1, resolveu o problema de quem ainda ia instalar e **criou um pior para
+quem já tinha instalado**: o plugin passou a aparecer com erro vermelho — *failed to load, não
+encontrado no marketplace* — e a única forma de se livrar dele virou comando no terminal. Isso foi
+medido, não suposto.
+
+Com ele de volta na lista, quem instalou por engano vê o plugin normal e **remove pelo menu, em dois
+cliques**. E quem for instalar agora lê o nome antes de clicar:
+
+> **Prometheus — Ações (complemento: NÃO conecta a conta)**
+
+A descrição começa dizendo a mesma coisa. Quem quer conectar a conta instala o **Prometheus**.
+
+Nada mudou no pacote de leitura além do número da versão.
+
 ## 1.8.1 — 6 de novembro de 2026
 
 **A lista de plugins voltou a ter um pacote só: o de leitura.**

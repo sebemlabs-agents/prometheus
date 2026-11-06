@@ -793,30 +793,34 @@ def test_responder_reconciliar_fecha_pela_leitura(perguntas_api):
 
 # ================================================== o pacote, como ele e servido
 
-def test_a_vitrine_tem_so_o_pacote_de_leitura_ate_a_imersao():
-    """TEMPORARIO, ate 12/11/2026.
-
-    O pacote de acoes saiu da VITRINE (nao do repositorio) porque usuarios
-    abriram a lista de plugins e instalaram ele achando que era o de conexao,
-    ficando sem as skills de conectar a conta. Numa sala com cem pessoas isso e
-    erro garantido.
-
-    Depois da imersao, devolver `prometheus-acoes` ao marketplace.json e trocar
-    este teste de volta pelo `test_o_marketplace_oferece_os_dois_pacotes_separados`,
-    que exigia os dois com `source` "./" e "./acoes"."""
+def test_o_marketplace_oferece_os_dois_pacotes_separados():
     d = json.loads((RAIZ / ".claude-plugin" / "marketplace.json")
                    .read_text(encoding="utf-8"))
     por_nome = {p["name"]: p for p in d["plugins"]}
     assert por_nome["prometheus"]["source"] == "./"
-    assert "prometheus-acoes" not in por_nome, (
-        "o pacote de acoes voltou para a vitrine; se foi de proposito, troque "
-        "este teste pelo que exige os dois"
+    assert por_nome["prometheus-acoes"]["source"] == "./acoes"
+
+
+def test_o_nome_do_pacote_de_acoes_nao_se_confunde_com_o_de_conexao():
+    """Tirar o pacote de acoes da vitrine FOI PIOR: medido em 06/11, quem ja
+    tinha instalado passou a ver `failed to load - nao encontrado no
+    marketplace`, e a unica saida virou comando no terminal. Com ele na vitrine,
+    o plugin carrega e sai pelo menu, em dois cliques.
+
+    A protecao, entao, e o NOME: ele tem de dizer que nao e o da conexao, antes
+    de alguem clicar."""
+    d = json.loads((RAIZ / ".claude-plugin" / "marketplace.json")
+                   .read_text(encoding="utf-8"))
+    acoes = {p["name"]: p for p in d["plugins"]}["prometheus-acoes"]
+    nome = acoes["displayName"].lower()
+    assert "não conecta" in nome or "nao conecta" in nome, (
+        "o nome do pacote de acoes precisa avisar que ele NAO conecta a conta: "
+        "foi assim que mentorados instalaram o errado na vespera da imersao"
     )
+    assert acoes["description"].lower().startswith("não é este que conecta")
 
 
 def test_o_pacote_de_acoes_continua_no_repositorio():
-    """Sair da vitrine nao e sair do repositorio: o pacote segue inteiro, para
-    voltar a lista depois da imersao."""
     assert (RAIZ / "acoes" / ".claude-plugin" / "plugin.json").exists()
     assert (RAIZ / "acoes" / "skills" / "prometheus-aderir-promocao").is_dir()
     assert (RAIZ / "acoes" / "skills" / "prometheus-responder-pergunta").is_dir()
