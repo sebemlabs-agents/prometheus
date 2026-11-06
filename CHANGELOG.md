@@ -23,6 +23,55 @@
 > 4. anotar a mudança aqui embaixo
 > 5. publicar pelo Cypher Guard
 
+## 1.8.0 — 6 de novembro de 2026
+
+**A conexão da Shopee parava de funcionar em quatro horas, e agora não para mais.**
+
+A renovação automática dela estava escrita no pacote e **nunca era chamada**. O acesso da Shopee
+vale 4 horas; passado esse tempo a conexão simplesmente morria, com a chave de renovação — que vale
+30 dias — intacta e sem uso. Quem conectou a Shopee e voltou no dia seguinte achava que tinha
+perdido a conexão.
+
+**E as duas conexões ganharam uma trava.** A chave de renovação do Mercado Livre e a da Shopee são
+de **uso único**: cada renovação devolve uma nova e invalida a anterior. Se duas coisas renovam ao
+mesmo tempo na mesma pasta — uma rotina agendada e você mexendo à mão, por exemplo — as duas usam a
+mesma chave, uma funciona e a outra morre. O sintoma aparece horas depois e parece queda de
+internet. Agora a renovação acontece uma de cada vez, e quem chega depois aproveita o resultado de
+quem chegou primeiro, em vez de tentar de novo.
+
+**Dá para provar que a renovação funciona, sem esperar horas:**
+
+```
+python3 meli.py renovar
+python3 shopee.py renovar
+```
+
+Isso existe porque "a chave de renovação chegou" **não** quer dizer que a renovação funciona. Se o
+Client Secret ou a Partner Key foi colada com um espaço a mais, a chave fica lá, bonita, e só falha
+na primeira renovação de verdade — horas depois, quando você não está olhando. O comando faz a
+renovação na hora e responde `renovacao funcionou`. O `check` dos dois canais também passou a
+mostrar o estado (`renovacao automatica: ligada`).
+
+**Resposta incompleta não derruba mais uma conexão boa.** O pacote aceitava uma resposta sem a chave
+de renovação e inventava o prazo de validade. Com isso, uma resposta pela metade trocava uma conexão
+que se renova por uma que não se renova, sem avisar ninguém. Agora ele confere antes de guardar: se a
+resposta não serve, **não grava nada** e a conexão atual continua valendo.
+
+**E o pacote não queima a chave sem ter onde guardar o resultado.** Antes de renovar, ele confere se
+consegue gravar na pasta. Se não conseguir, não renova e diz o que fazer — porque renovar e perder o
+resultado derrubaria o acesso de verdade, em vez de ele apenas expirar.
+
+Nada disso muda o que você já usa: leitura com acesso no prazo segue exatamente como era, sem passar
+por trava nenhuma. O arquivo da conexão não mudou de formato, então a versão anterior e esta leem o
+mesmo arquivo.
+
+**Continua valendo o principal: o pacote só lê.** Qualquer tentativa de alterar algo na conta é
+recusada antes de sair do computador.
+
+Em pasta de rede ou sistema que não sabe travar arquivo, a trava se desliga sozinha avisando, e o
+pacote funciona como antes dela existir. No Windows o caminho da trava é outro e ainda não foi
+exercitado numa máquina Windows.
+
 ## prometheus-acoes 1.0.0 — 2 de novembro de 2026
 
 **Um segundo pacote, e ele muda coisa na conta.** `prometheus` continua só leitura. Quem
