@@ -793,12 +793,33 @@ def test_responder_reconciliar_fecha_pela_leitura(perguntas_api):
 
 # ================================================== o pacote, como ele e servido
 
-def test_o_marketplace_oferece_os_dois_pacotes_separados():
+def test_a_vitrine_tem_so_o_pacote_de_leitura_ate_a_imersao():
+    """TEMPORARIO, ate 12/11/2026.
+
+    O pacote de acoes saiu da VITRINE (nao do repositorio) porque usuarios
+    abriram a lista de plugins e instalaram ele achando que era o de conexao,
+    ficando sem as skills de conectar a conta. Numa sala com cem pessoas isso e
+    erro garantido.
+
+    Depois da imersao, devolver `prometheus-acoes` ao marketplace.json e trocar
+    este teste de volta pelo `test_o_marketplace_oferece_os_dois_pacotes_separados`,
+    que exigia os dois com `source` "./" e "./acoes"."""
     d = json.loads((RAIZ / ".claude-plugin" / "marketplace.json")
                    .read_text(encoding="utf-8"))
     por_nome = {p["name"]: p for p in d["plugins"]}
     assert por_nome["prometheus"]["source"] == "./"
-    assert por_nome["prometheus-acoes"]["source"] == "./acoes"
+    assert "prometheus-acoes" not in por_nome, (
+        "o pacote de acoes voltou para a vitrine; se foi de proposito, troque "
+        "este teste pelo que exige os dois"
+    )
+
+
+def test_o_pacote_de_acoes_continua_no_repositorio():
+    """Sair da vitrine nao e sair do repositorio: o pacote segue inteiro, para
+    voltar a lista depois da imersao."""
+    assert (RAIZ / "acoes" / ".claude-plugin" / "plugin.json").exists()
+    assert (RAIZ / "acoes" / "skills" / "prometheus-aderir-promocao").is_dir()
+    assert (RAIZ / "acoes" / "skills" / "prometheus-responder-pergunta").is_dir()
 
 
 def test_o_marketplace_nao_carrega_versao():

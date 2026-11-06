@@ -18,20 +18,6 @@
         "painel"
       ],
       "displayName": "Prometheus"
-    },
-    {
-      "name": "prometheus-acoes",
-      "source": "./acoes",
-      "description": "A parte do Prometheus que MUDA COISA na sua conta. O pacote prometheus lê; este age: adere um anúncio a uma campanha (e sai dela) e publica resposta a pergunta. Uma ação por vez, o antes e o depois na tela antes de enviar, código de confirmação que vence em 10 minutos, e recibo de tudo. Exige permissão de escrita na autorização do seu aplicativo. Instalar isto é uma decisão: sem ele, o Prometheus não consegue mudar nada na sua conta nem se alguém pedir.",
-      "license": "MIT",
-      "keywords": [
-        "mercado-livre",
-        "marketplace",
-        "ecommerce",
-        "promocoes",
-        "escrita"
-      ],
-      "displayName": "Prometheus — Ações"
     }
   ]
 }
