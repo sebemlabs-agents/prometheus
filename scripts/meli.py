@@ -171,6 +171,24 @@ def traduzir_erro(status, bruto):
     return "O Mercado Livre respondeu com erro %s." % status
 
 
+def _prazo_em_segundos(valor):
+    """Prazo de validade em segundos, ou None se nao der para entender.
+
+    Aceita numero em TEXTO de proposito: o codigo anterior fazia
+    `int(resp.get(...))` e aceitava "21600". Recusar isso seria regressao em quem
+    hoje funciona, se o provedor ou um proxy devolver o numero como texto."""
+    if isinstance(valor, bool) or valor is None:
+        return None
+    if isinstance(valor, (int, float)):
+        return int(valor)
+    if isinstance(valor, str):
+        try:
+            return int(float(valor.strip()))
+        except ValueError:
+            return None
+    return None
+
+
 def _validar_par(resp, exigir_refresh, campo_prazo):
     """Confere o contrato ANTES de substituir a credencial no disco.
 
@@ -181,8 +199,8 @@ def _validar_par(resp, exigir_refresh, campo_prazo):
     acesso = resp.get("access_token")
     if not isinstance(acesso, str) or not acesso:
         raise RespostaInvalida("A resposta do provedor veio sem token de acesso.")
-    prazo = resp.get(campo_prazo)
-    if isinstance(prazo, bool) or not isinstance(prazo, (int, float)):
+    prazo = _prazo_em_segundos(resp.get(campo_prazo))
+    if prazo is None:
         raise RespostaInvalida("A resposta do provedor veio sem prazo de validade.")
     if prazo <= 0:
         raise RespostaInvalida("A resposta do provedor veio com prazo invalido.")

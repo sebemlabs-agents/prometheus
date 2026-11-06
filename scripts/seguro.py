@@ -28,8 +28,10 @@ cross-vendor de 22/10/2026:
 Compatibilidade: Python 3.8+, sem dependencia externa.
 """
 import contextlib
+import errno
 import os
 import tempfile
+import sys
 import threading
 import time
 import urllib.parse
@@ -202,6 +204,33 @@ class TravaOcupada(RuntimeError):
     """Outra execucao esta renovando a credencial nesta pasta."""
 
 
+# "ocupado" e "este sistema nao sabe travar" chegam os dois como OSError, e
+# confundir os dois tem consequencia grave nas duas direcoes: tratar
+# nao-suportado como ocupado faz a renovacao esperar e FALHAR em pasta de rede
+# ou monte exotico, onde hoje funciona; tratar ocupado como nao-suportado faz a
+# trava deixar de travar.
+_NAO_SUPORTADO = {
+    getattr(errno, nome) for nome in
+    ("ENOTSUP", "EOPNOTSUPP", "EINVAL", "ENOLCK", "ENOSYS", "EPERM", "EBADF")
+    if hasattr(errno, nome)
+}
+
+_avisou_sem_trava = set()
+
+
+def _avisar_sem_trava(alvo, motivo):
+    """Avisa uma vez por processo, no stderr (stdout e saida de dado)."""
+    if alvo in _avisou_sem_trava:
+        return
+    _avisou_sem_trava.add(alvo)
+    print(
+        "aviso: nao deu para usar a trava de renovacao nesta pasta (%s). Sigo sem "
+        "ela — e o mesmo comportamento de antes da trava existir. Nao rode duas "
+        "coisas ao mesmo tempo nesta pasta." % motivo,
+        file=sys.stderr,
+    )
+
+
 _abertas = {}
 _guarda = threading.Lock()
 
@@ -262,14 +291,28 @@ def _trava_real(credencial, timeout=30):
                     estado[0] -= 1
         return
 
-    fd = os.open(str(alvo), os.O_CREAT | os.O_RDWR, 0o600)
+    try:
+        fd = os.open(str(alvo), os.O_CREAT | os.O_RDWR, 0o600)
+    except OSError as e:
+        # Nem o arquivo de trava da para criar. Quem explica o problema de
+        # verdade e o `pode_gravar` de quem chamou, com mensagem util — nao um
+        # erro cru de abertura de arquivo. Segue sem trava.
+        _avisar_sem_trava(chave, "nao deu para criar %s" % alvo.name)
+        yield
+        return
     limite = time.time() + max(0, timeout)
     try:
         while True:
             try:
                 _tentar_travar(fd)
                 break
-            except OSError:
+            except OSError as e:
+                if e.errno in _NAO_SUPORTADO:
+                    # Este sistema de arquivos nao faz trava. Esperar e depois
+                    # falhar quebraria quem hoje funciona.
+                    _avisar_sem_trava(chave, "o sistema de arquivos nao suporta")
+                    yield
+                    return
                 if time.time() >= limite:
                     raise TravaOcupada(
                         "Outra execucao esta renovando a credencial nesta pasta. "

@@ -252,6 +252,24 @@ def _explicar(dado):
             "Platform, em Shop Authorization.")
 
 
+def _prazo_em_segundos(valor):
+    """Prazo de validade em segundos, ou None se nao der para entender.
+
+    Aceita numero em TEXTO de proposito: o codigo anterior fazia
+    `int(resp.get(...))` e aceitava "21600". Recusar isso seria regressao em quem
+    hoje funciona, se o provedor ou um proxy devolver o numero como texto."""
+    if isinstance(valor, bool) or valor is None:
+        return None
+    if isinstance(valor, (int, float)):
+        return int(valor)
+    if isinstance(valor, str):
+        try:
+            return int(float(valor.strip()))
+        except ValueError:
+            return None
+    return None
+
+
 def _validar_par(dado, exigir_refresh):
     """Confere o contrato ANTES de substituir a credencial no disco.
 
@@ -261,8 +279,8 @@ def _validar_par(dado, exigir_refresh):
     acesso = dado.get("access_token")
     if not isinstance(acesso, str) or not acesso:
         raise RespostaInvalida("A Shopee respondeu sem token de acesso.")
-    prazo = dado.get("expire_in")
-    if isinstance(prazo, bool) or not isinstance(prazo, (int, float)):
+    prazo = _prazo_em_segundos(dado.get("expire_in"))
+    if prazo is None:
         raise RespostaInvalida("A Shopee respondeu sem prazo de validade.")
     if prazo <= 0:
         raise RespostaInvalida("A Shopee respondeu com prazo invalido.")

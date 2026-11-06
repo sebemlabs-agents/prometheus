@@ -524,3 +524,74 @@ def test_renovar_da_shopee_prova_de_verdade(tmp_path, monkeypatch, capsys):
     saida = capsys.readouterr().out
     assert "funcionou" in saida.lower()
     assert "AT-novo" not in saida and "RT-novo" not in saida
+
+
+# ------------------- REGRESSAO: nao quebrar o que ja funciona
+#
+# A conexao basica do Mercado Livre ja funcionava antes desta frente. Dois jeitos
+# de o conserto quebra-la, os dois encontrados revisando o proprio diff:
+
+def test_prazo_como_texto_continua_aceito(tmp_path, monkeypatch):
+    """O codigo antigo fazia int(resp.get("expires_in", 21600)) — aceitava
+    "21600" como TEXTO. Recusar isso seria regressao: se o provedor (ou um proxy
+    no meio) devolver numero em texto, a renovacao pararia de funcionar."""
+    arq = tmp_path / "tokens.json"
+    monkeypatch.setattr(meli, "TOKENS_FILE", arq)
+    dados = meli.salvar_tokens(_resp(expires_in="21600"))
+    assert dados["expires_at"] > time.time() + 21000
+
+
+def test_prazo_como_texto_sem_numero_e_recusado(tmp_path, monkeypatch):
+    arq = tmp_path / "tokens.json"
+    monkeypatch.setattr(meli, "TOKENS_FILE", arq)
+    with pytest.raises(meli.RespostaInvalida):
+        meli.salvar_tokens(_resp(expires_in="muito tempo"))
+
+
+def test_sistema_que_nao_sabe_travar_segue_sem_trava_em_vez_de_falhar(tmp_path, monkeypatch, capsys):
+    """Pasta em rede, monte exotico, alguns servicos de sincronizacao: o arquivo
+    abre mas travar nao e suportado. Falhar ali quebraria quem hoje funciona —
+    e seguir sem trava devolve exatamente o comportamento de hoje, que funciona.
+    Esperar 30s e depois falhar seria o pior dos dois mundos."""
+    import errno
+    cred = tmp_path / "tokens.json"
+
+    def nao_suportado(fd):
+        raise OSError(errno.ENOTSUP, "Operation not supported")
+
+    monkeypatch.setattr(seguro, "_tentar_travar", nao_suportado)
+    inicio = time.time()
+    with seguro.trava(cred, timeout=30):
+        pass
+    assert time.time() - inicio < 2, "ficou esperando por uma trava que o sistema nao faz"
+    assert "trava" in capsys.readouterr().err.lower()
+
+
+def test_trava_ocupada_continua_esperando_e_falhando(tmp_path, monkeypatch):
+    """O oposto do caso acima: 'ocupado' nao pode ser confundido com 'nao
+    suportado', senao a trava deixa de travar."""
+    import errno
+    cred = tmp_path / "tokens.json"
+
+    def ocupado(fd):
+        raise OSError(errno.EWOULDBLOCK, "Resource temporarily unavailable")
+
+    monkeypatch.setattr(seguro, "_tentar_travar", ocupado)
+    with pytest.raises(seguro.TravaOcupada):
+        with seguro.trava(cred, timeout=1):
+            pytest.fail("nao devia entrar")
+
+
+def test_sem_poder_criar_o_arquivo_de_trava_nao_impede_renovar(tmp_path, monkeypatch, capsys):
+    """Se nem o arquivo de trava pode ser criado, quem explica o problema e o
+    `pode_gravar` (mensagem clara), nao um erro cru de abertura de arquivo."""
+    import errno
+    cred = tmp_path / "tokens.json"
+
+    def recusa(*a, **k):
+        raise OSError(errno.EACCES, "Permission denied")
+
+    monkeypatch.setattr(seguro.os, "open", recusa)
+    with seguro.trava(cred, timeout=5):
+        pass
+    assert "trava" in capsys.readouterr().err.lower()
