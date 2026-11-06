@@ -183,6 +183,18 @@ A rotina diária precisa de renovação automática. Depois da autorização, o 
 se o Mercado Livre devolveu o refresh token. Se avisar que não veio, confira nas configurações
 da aplicação se há opção de acesso offline e autorize de novo.
 
+**"Veio o refresh" não prova que a renovação funciona.** Um Client Secret colado com um espaço
+a mais deixa o refresh lá, bonito, e falha na primeira renovação de verdade — que só acontece
+umas seis horas depois. Confirme na hora, com a pessoa ainda na sua frente:
+
+```
+python3 meli.py renovar
+```
+
+Ela deve responder `renovacao funcionou`. Se responder que o Mercado Livre recusou, refaça a
+autorização agora — é muito mais barato que descobrir isso no dia seguinte. O
+`python3 meli.py check` também passou a mostrar o estado (`renovacao automatica: ligada`).
+
 O refresh token do Mercado Livre é de **uso único**: cada renovação devolve um novo, que
 substitui o anterior. O `meli.py` já cuida disso — por isso não se deve copiar `tokens.json`
 para outra máquina nem rodar a mesma credencial em dois lugares ao mesmo tempo. Dois

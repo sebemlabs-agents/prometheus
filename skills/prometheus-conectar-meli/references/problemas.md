@@ -14,6 +14,9 @@ tente adivinhar — errar o diagnóstico custa mais que admitir.
 | `invalid_grant` depois de dias funcionando | refresh token expirou (6 meses sem uso), senha da conta mudou, Secret renovado, ou permissão revogada | atualize o `credenciais.txt` se o Secret mudou, e refaça a autorização |
 | `invalid_operator_user_id` | autorizou com conta de operador ou colaborador | repita com a conta **administradora** da loja |
 | `tokens.json sem refresh_token` | a aplicação não entregou acesso offline | veja "Acesso contínuo" em `devcenter.md` |
+| Quer saber se a renovação funciona, sem esperar 6 horas | presença de refresh não é prova | `python3 meli.py renovar` — responde `renovacao funcionou` ou diz o que o ML recusou |
+| `Outra execucao esta renovando a credencial nesta pasta` | duas coisas rodando ao mesmo tempo na mesma pasta (rotina agendada + uso manual, ou duas janelas) | **não é erro de conexão.** Espere a outra terminar e rode de novo. A trava existe justamente para a renovação não acontecer duas vezes |
+| `Nao consigo gravar na pasta da conexao` | a pasta não aceita gravação (permissão, caminho, disco) | o pacote **não renovou de propósito**: renovar sem poder guardar o resultado derrubaria o acesso. Conserte a permissão da pasta e rode de novo |
 | `403 PA_UNAUTHORIZED_RESULT_FROM_POLICIES` | falta permissão funcional | marque as quatro no DevCenter e autorize de novo |
 | `401` depois de semanas | acesso expirado | refaça a etapa 5 |
 | `429` | muitas chamadas seguidas | espere alguns segundos. Numa sala com muita gente na mesma rede isso é esperado: siga o combinado de todo mundo na mesma tela, comando só no ok |

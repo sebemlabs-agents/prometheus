@@ -18,6 +18,7 @@ import hashlib
 import hmac
 import json
 import os
+import sys
 import re
 import time
 import urllib.parse
@@ -52,6 +53,15 @@ _RECADO_CODIGO = (
 
 class SemAutorizacao(RuntimeError):
     """Ainda nao foi feita a autorizacao (nao existe tokens-shopee.json)."""
+
+
+class RespostaInvalida(RuntimeError):
+    """A Shopee respondeu sem um par utilizavel.
+
+    Nao se grava isso por cima de uma credencial boa: antes, `salvar_tokens`
+    aceitava refresh vazio como "" e INVENTAVA a validade padrao, entao uma
+    resposta incompleta trocava uma conexao que renova por uma que nao renova,
+    sem dizer nada."""
 
 
 class ErroDaAPI(RuntimeError):
@@ -242,21 +252,63 @@ def _explicar(dado):
             "Platform, em Shop Authorization.")
 
 
-def salvar_tokens(dado, partner_id, shop_id):
+def _prazo_em_segundos(valor):
+    """Prazo de validade em segundos, ou None se nao der para entender.
+
+    Aceita numero em TEXTO de proposito: o codigo anterior fazia
+    `int(resp.get(...))` e aceitava "21600". Recusar isso seria regressao em quem
+    hoje funciona, se o provedor ou um proxy devolver o numero como texto."""
+    if isinstance(valor, bool) or valor is None:
+        return None
+    if isinstance(valor, (int, float)):
+        return int(valor)
+    if isinstance(valor, str):
+        try:
+            return int(float(valor.strip()))
+        except ValueError:
+            return None
+    return None
+
+
+def _validar_par(dado, exigir_refresh):
+    """Confere o contrato ANTES de substituir a credencial no disco.
+
+    `exigir_refresh` e falso somente na autorizacao inicial: ali, uma loja sem
+    acesso continuo ainda da leitura por algumas horas, e recusar deixaria a
+    pessoa sem nada. Na RENOVACAO e sempre verdadeiro."""
+    acesso = dado.get("access_token")
+    if not isinstance(acesso, str) or not acesso:
+        raise RespostaInvalida("A Shopee respondeu sem token de acesso.")
+    prazo = _prazo_em_segundos(dado.get("expire_in"))
+    if prazo is None:
+        raise RespostaInvalida("A Shopee respondeu sem prazo de validade.")
+    if prazo <= 0:
+        raise RespostaInvalida("A Shopee respondeu com prazo invalido.")
+    renovacao = dado.get("refresh_token")
+    if exigir_refresh and (not isinstance(renovacao, str) or not renovacao):
+        raise RespostaInvalida(
+            "A renovacao veio sem o token de renovacao novo. Nao gravei nada: a "
+            "conexao atual continua valendo."
+        )
+    return int(prazo)
+
+
+def salvar_tokens(dado, partner_id, shop_id, exigir_refresh=True):
     """Guarda o acesso na pasta da pessoa, ja com a permissao fechada.
 
     Grava por substituicao atomica: o arquivo nasce restrito ao dono e so
     depois toma o lugar do antigo. Gravar primeiro e fechar depois deixaria o
     token legivel por outros usuarios da maquina nesse intervalo."""
+    prazo = _validar_par(dado, exigir_refresh)
     conteudo = {
         "partner_id": partner_id,
         "shop_id": shop_id,
         "access_token": dado["access_token"],
-        "refresh_token": dado.get("refresh_token", ""),
-        "expires_at": int(time.time()) + int(dado.get("expire_in", 14400)),
+        "refresh_token": dado.get("refresh_token") or "",
+        "expires_at": int(time.time()) + prazo,
         "atualizado_em": time.strftime("%Y-%m-%d %H:%M:%S"),
     }
-    estado = seguro.gravar_protegido(
+    estado = seguro.gravar_insistindo(
         TOKENS_FILE, json.dumps(conteudo, indent=2, ensure_ascii=False) + "\n")
     conteudo.update(estado)
     return conteudo
@@ -266,22 +318,75 @@ def trocar_code_por_token(code, shop_id, partner_id, partner_key):
     corpo = {"code": code, "partner_id": partner_id}
     if shop_id:
         corpo["shop_id"] = shop_id
+    # exigir_refresh=False: loja sem acesso continuo ainda da leitura por
+    # algumas horas, e o autorizar_shopee.py avisa. Recusar aqui seria pior.
     return salvar_tokens(
-        _post(CAMINHO_TOKEN, corpo, partner_id, partner_key), partner_id, shop_id)
+        _post(CAMINHO_TOKEN, corpo, partner_id, partner_key), partner_id, shop_id,
+        exigir_refresh=False)
 
 
 def renovar(partner_key):
     """Troca o refresh_token por um par novo.
 
     O refresh da Shopee e de USO UNICO, igual ao do Mercado Livre: duas
-    renovacoes ao mesmo tempo derrubam a conexao. Por isso nao se copia
+    renovacoes ao mesmo tempo derrubam a conexao. Por isso o trecho
+    ler->renovar->gravar roda inteiro dentro da trava, e por isso nao se copia
     tokens-shopee.json para outra maquina."""
+    with seguro.trava(TOKENS_FILE):
+        t = _carregar()
+        if not t.get("refresh_token"):
+            raise SemAutorizacao(
+                "A conexao da Shopee nao tem renovacao automatica. Refaca: "
+                "python3 autorizar_shopee.py")
+        # Confere ANTES de consumir o refresh: queimar o token de uso unico sem
+        # ter onde guardar o par novo derruba a conexao de verdade, em vez de
+        # ela so expirar.
+        if not seguro.pode_gravar(TOKENS_FILE):
+            raise SemAutorizacao(
+                "Nao consigo gravar na pasta da conexao, entao nao renovei. "
+                "Confira a permissao da pasta e rode de novo.")
+        # Uma tentativa, e so: repetir manda um refresh que pode ja ter sido
+        # consumido.
+        dado = _post(CAMINHO_REFRESH,
+                     {"refresh_token": t["refresh_token"], "shop_id": t["shop_id"],
+                      "partner_id": t["partner_id"]},
+                     t["partner_id"], partner_key)
+        return salvar_tokens(dado, t["partner_id"], t["shop_id"])
+
+
+def _partner_key():
+    return os.environ.get("SHOPEE_PARTNER_KEY") or _chave_do_arquivo()
+
+
+def credencial_valida():
+    """Credencial inteira e no prazo — renovando se preciso.
+
+    O defeito que isto fecha [LST-17861]: `renovar()` existia e NINGUEM chamava;
+    `expires_at` era gravado e nunca lido. A conexao da Shopee morria em 4 horas
+    com o refresh de 30 dias intacto no disco.
+
+    Devolve o dicionario TODO, de uma leitura so: `api()` precisa do token e da
+    identificacao da loja coerentes entre si. Pegar so o token novo e manter
+    shop_id de uma leitura anterior cria inconsistencia se houver reautorizacao
+    concorrente — apontamento do gate."""
     t = _carregar()
-    dado = _post(CAMINHO_REFRESH,
-                 {"refresh_token": t["refresh_token"], "shop_id": t["shop_id"],
-                  "partner_id": t["partner_id"]},
-                 t["partner_id"], partner_key)
-    return salvar_tokens(dado, t["partner_id"], t["shop_id"])
+    if t.get("expires_at", 0) - MARGEM_SEG > time.time():
+        return t
+    with seguro.trava(TOKENS_FILE):
+        # Rele dentro da trava: quem esperou normalmente ja encontra o par novo.
+        t = _carregar()
+        if t.get("expires_at", 0) - MARGEM_SEG > time.time():
+            return t
+        if not t.get("refresh_token"):
+            raise SemAutorizacao(
+                "A conexao da Shopee nao tem renovacao automatica. Refaca: "
+                "python3 autorizar_shopee.py")
+        return renovar(_partner_key())
+
+
+def access_token_valido():
+    """Atalho de leitura: so o access_token no prazo."""
+    return credencial_valida()["access_token"]
 
 
 def _carregar():
@@ -300,8 +405,8 @@ def api(metodo, caminho, **parametros):
             "sair do seu computador. Alterar anuncio, preco ou pedido se faz no "
             "painel da Shopee, por voce." % (metodo.upper(), caminho)
         )
-    t = _carregar()
-    partner_key = os.environ.get("SHOPEE_PARTNER_KEY") or _chave_do_arquivo()
+    t = credencial_valida()
+    partner_key = _partner_key()
     agora = int(time.time())
     sign = assinar(t["partner_id"], caminho, agora, partner_key)
     q = {"partner_id": t["partner_id"], "timestamp": agora, "sign": sign,
@@ -326,3 +431,56 @@ def _chave_do_arquivo():
             "Falta SHOPEE_PARTNER_KEY em credenciais.txt. Abra o arquivo, "
             "preencha depois do '=' e salve. Nunca cole a chave no chat.")
     return chave
+
+
+def estado_da_renovacao():
+    """"tem refresh" / "nao veio" / "sem conexao" — presenca, NAO prova.
+
+    Renovacao comprovada exige POST concluido, corpo validado e par gravado:
+    isso e o `renovar`."""
+    if not TOKENS_FILE.exists():
+        return "sem_conexao"
+    try:
+        t = json.loads(TOKENS_FILE.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return "ilegivel"
+    return "tem_refresh" if t.get("refresh_token") else "nao_veio"
+
+
+def _main():
+    """CLI minimo: conferir e PROVAR a renovacao sem reautorizar.
+
+    Nenhum comando imprime token ou Partner Key."""
+    args = sys.argv[1:]
+    cmd = args[0] if args else "check"
+    if cmd == "check":
+        estado = estado_da_renovacao()
+        print("%-22s %s" % ("conexao", "feita" if TOKENS_FILE.exists() else "ainda nao"))
+        print("%-22s %s" % ("renovacao automatica", {
+            "tem_refresh": "ligada (confirme com: python3 shopee.py renovar)",
+            "nao_veio": "NAO veio — o acesso para em ~4h. Refaca: python3 autorizar_shopee.py",
+            "sem_conexao": "ainda nao (rode autorizar_shopee.py)",
+            "ilegivel": "nao deu para ler o arquivo da conexao",
+        }[estado]))
+        return 0 if estado == "tem_refresh" else 1
+    if cmd == "renovar":
+        try:
+            renovar(_partner_key())
+        except (SemAutorizacao, RespostaInvalida, seguro.TravaOcupada) as e:
+            print("Nao deu: %s" % e)
+            return 1
+        except ErroDaAPI as e:
+            print("Nao deu: a Shopee recusou a renovacao. %s" % e)
+            print("Refaca a conexao: python3 autorizar_shopee.py")
+            return 1
+        print("renovacao funcionou: par novo guardado, acesso valido por ~4h.")
+        return 0
+    print("Comando desconhecido: %s (use check | renovar)" % cmd)
+    return 2
+
+
+if __name__ == "__main__":
+    try:
+        sys.exit(_main())
+    except (SemAutorizacao, ErroDaAPI, RespostaInvalida, PermissionError) as e:
+        sys.exit(str(e))

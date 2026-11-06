@@ -3,6 +3,7 @@
 
 CLI:
     python3 meli.py check               # diz se as credenciais estao preenchidas
+    python3 meli.py renovar             # PROVA que a renovacao automatica funciona
                                         # (sem mostrar nenhum valor)
     python3 meli.py me                  # GET /users/me — confirma qual conta conectou
     python3 meli.py get /users/me       # GET em qualquer path
@@ -52,6 +53,15 @@ class CredenciaisIncompletas(RuntimeError):
 
 class SemAutorizacao(RuntimeError):
     """Ainda nao foi feita a autorizacao (nao existe tokens.json)."""
+
+
+class RespostaInvalida(RuntimeError):
+    """O provedor respondeu sem um par utilizavel.
+
+    Nao se grava isso por cima de uma credencial boa: antes, `salvar_tokens`
+    aceitava refresh vazio como "" e INVENTAVA a validade padrao, entao uma
+    resposta incompleta trocava uma conexao que renovava por uma que nao renova,
+    sem dizer nada."""
 
 
 class ErroDaAPI(RuntimeError):
@@ -161,13 +171,56 @@ def traduzir_erro(status, bruto):
     return "O Mercado Livre respondeu com erro %s." % status
 
 
-def salvar_tokens(resp):
+def _prazo_em_segundos(valor):
+    """Prazo de validade em segundos, ou None se nao der para entender.
+
+    Aceita numero em TEXTO de proposito: o codigo anterior fazia
+    `int(resp.get(...))` e aceitava "21600". Recusar isso seria regressao em quem
+    hoje funciona, se o provedor ou um proxy devolver o numero como texto."""
+    if isinstance(valor, bool) or valor is None:
+        return None
+    if isinstance(valor, (int, float)):
+        return int(valor)
+    if isinstance(valor, str):
+        try:
+            return int(float(valor.strip()))
+        except ValueError:
+            return None
+    return None
+
+
+def _validar_par(resp, exigir_refresh, campo_prazo):
+    """Confere o contrato ANTES de substituir a credencial no disco.
+
+    `exigir_refresh` e falso somente na autorizacao inicial: ali, uma conta sem
+    acesso continuo ainda pode ser usada por algumas horas, e recusar deixaria a
+    pessoa sem leitura nenhuma. Na RENOVACAO e sempre verdadeiro — gravar um
+    refresh vazio em cima de um bom mata a renovacao em silencio."""
+    acesso = resp.get("access_token")
+    if not isinstance(acesso, str) or not acesso:
+        raise RespostaInvalida("A resposta do provedor veio sem token de acesso.")
+    prazo = _prazo_em_segundos(resp.get(campo_prazo))
+    if prazo is None:
+        raise RespostaInvalida("A resposta do provedor veio sem prazo de validade.")
+    if prazo <= 0:
+        raise RespostaInvalida("A resposta do provedor veio com prazo invalido.")
+    renovacao = resp.get("refresh_token")
+    if exigir_refresh and (not isinstance(renovacao, str) or not renovacao):
+        raise RespostaInvalida(
+            "A renovacao veio sem o token de renovacao novo. Nao gravei nada: a "
+            "conexao atual continua valendo."
+        )
+    return int(prazo)
+
+
+def salvar_tokens(resp, exigir_refresh=True):
+    prazo = _validar_par(resp, exigir_refresh, "expires_in")
     dados = {
         "access_token": resp["access_token"],
-        "refresh_token": resp.get("refresh_token", ""),
+        "refresh_token": resp.get("refresh_token") or "",
         "user_id": resp.get("user_id"),
         "scope": resp.get("scope", ""),
-        "expires_at": int(time.time()) + int(resp.get("expires_in", 21600)),
+        "expires_at": int(time.time()) + prazo,
         "atualizado_em": time.strftime("%Y-%m-%d %H:%M:%S"),
     }
     # Este e o arquivo mais sensivel da pasta, e ele nasce DEPOIS que o
@@ -176,7 +229,7 @@ def salvar_tokens(resp):
     # depois deixava o token legivel por outros usuarios da maquina nesse
     # intervalo. Mesma regra de sempre: medir o resultado, nunca confiar na
     # chamada.
-    dados.update(seguro.gravar_protegido(
+    dados.update(seguro.gravar_insistindo(
         TOKENS_FILE, json.dumps(dados, indent=2, ensure_ascii=False) + "\n"))
     return dados
 
@@ -192,7 +245,23 @@ def trocar_code_por_token(code, code_verifier=None):
     }
     if code_verifier:
         dados["code_verifier"] = code_verifier
-    return salvar_tokens(post_form(API + "/oauth/token", dados))
+    # exigir_refresh=False: conta sem acesso continuo ainda da leitura por
+    # algumas horas, e o autorizar.py avisa. Recusar aqui seria pior.
+    return salvar_tokens(post_form(API + "/oauth/token", dados), exigir_refresh=False)
+
+
+def estado_da_renovacao():
+    """"tem refresh" / "nao veio" / "sem conexao" — presenca, NAO prova.
+
+    Presenca de refresh significa configuracao disponivel. Renovacao comprovada
+    exige POST concluido, corpo validado e par gravado: isso e o `renovar`."""
+    if not TOKENS_FILE.exists():
+        return "sem_conexao"
+    try:
+        t = json.loads(TOKENS_FILE.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return "ilegivel"
+    return "tem_refresh" if t.get("refresh_token") else "nao_veio"
 
 
 def get_access_token(forcar=False):
@@ -209,21 +278,44 @@ def get_access_token(forcar=False):
     t = json.loads(TOKENS_FILE.read_text(encoding="utf-8"))
     if not forcar and t.get("expires_at", 0) - MARGEM_SEG > time.time():
         return t["access_token"]
-    if not t.get("refresh_token"):
-        raise SemAutorizacao(
-            "A conexao nao tem renovacao automatica. Refaca: python3 autorizar.py"
+
+    # Daqui para baixo vai renovar, e o refresh e de USO UNICO: ler->renovar->
+    # gravar tem de ser um trecho so, exclusivo entre processos. Sem a trava,
+    # duas execucoes na mesma pasta mandam o mesmo refresh e a conexao morre
+    # horas depois, parecendo falha de rede.
+    with seguro.trava(TOKENS_FILE):
+        # Rele DENTRO da trava: quem esperou normalmente ja encontra o par novo,
+        # e mandar o refresh lido antes de esperar seria mandar um token
+        # consumido.
+        t = json.loads(TOKENS_FILE.read_text(encoding="utf-8"))
+        if not forcar and t.get("expires_at", 0) - MARGEM_SEG > time.time():
+            return t["access_token"]
+        if not t.get("refresh_token"):
+            raise SemAutorizacao(
+                "A conexao nao tem renovacao automatica. Refaca: python3 autorizar.py"
+            )
+        # Confere ANTES de consumir o refresh: sem isto, uma pasta que nao
+        # aceita gravacao faz o token de uso unico ser queimado sem o par novo
+        # ter onde ficar — e a conexao morre de verdade, em vez de so expirar.
+        if not seguro.pode_gravar(TOKENS_FILE):
+            raise SemAutorizacao(
+                "Nao consigo gravar na pasta da conexao, entao nao renovei "
+                "(renovar sem poder guardar o resultado derrubaria o acesso). "
+                "Confira a permissao da pasta e rode de novo."
+            )
+        cfg = carregar_env()
+        # Uma tentativa, e so. Refresh de uso unico: repetir manda um token que
+        # pode ja ter sido consumido.
+        novo = post_form(
+            API + "/oauth/token",
+            {
+                "grant_type": "refresh_token",
+                "client_id": cfg["MELI_APP_ID"],
+                "client_secret": cfg["MELI_CLIENT_SECRET"],
+                "refresh_token": t["refresh_token"],
+            },
         )
-    cfg = carregar_env()
-    novo = post_form(
-        API + "/oauth/token",
-        {
-            "grant_type": "refresh_token",
-            "client_id": cfg["MELI_APP_ID"],
-            "client_secret": cfg["MELI_CLIENT_SECRET"],
-            "refresh_token": t["refresh_token"],
-        },
-    )
-    return salvar_tokens(novo)["access_token"]
+        return salvar_tokens(novo)["access_token"]
 
 
 # Repetir so faz sentido para limite de chamadas e falha passageira do servidor.
@@ -308,7 +400,31 @@ def _main():
             if k == "MELI_REDIRECT_URI" and v not in ("VAZIO",):
                 print("%-22s (confira se esta IDENTICA no DevCenter)" % "")
         print("%-22s %s" % ("conexao", "feita" if s["tokens"] else "ainda nao (rode autorizar.py)"))
+        estado = estado_da_renovacao()
+        print("%-22s %s" % ("renovacao automatica", {
+            "tem_refresh": "ligada (confirme com: python3 meli.py renovar)",
+            "nao_veio": "NAO veio — o acesso para em ~6h. Veja 'Acesso continuo' no guia",
+            "sem_conexao": "ainda nao (rode autorizar.py)",
+            "ilegivel": "nao deu para ler o arquivo da conexao",
+        }[estado]))
         return 1 if "VAZIO" in s["chaves"].values() else 0
+    if cmd == "renovar":
+        # Prova de verdade: "veio o refresh" nao diz que a renovacao funciona.
+        # Client Secret com um espaco a mais so falha aqui, horas depois.
+        try:
+            get_access_token(forcar=True)
+        except (SemAutorizacao, CredenciaisIncompletas, RespostaInvalida) as e:
+            print("Nao deu: %s" % e)
+            return 1
+        except ErroDaAPI as e:
+            print("Nao deu: o Mercado Livre recusou a renovacao (%s)." % e.status)
+            print("Refaca a conexao: python3 autorizar.py")
+            return 1
+        except seguro.TravaOcupada as e:
+            print("Nao deu: %s" % e)
+            return 1
+        print("renovacao funcionou: par novo guardado, acesso valido por ~6h.")
+        return 0
     if cmd == "me":
         c = conta_conectada()
         print(json.dumps(c, indent=2, ensure_ascii=False))
@@ -319,7 +435,7 @@ def _main():
             return 2
         print(json.dumps(api(args[1]), indent=2, ensure_ascii=False))
         return 0
-    print("Comando desconhecido: %s (use check | me | get)" % cmd)
+    print("Comando desconhecido: %s (use check | me | get | renovar)" % cmd)
     return 2
 
 

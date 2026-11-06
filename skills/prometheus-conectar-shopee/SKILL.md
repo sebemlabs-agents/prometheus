@@ -176,7 +176,9 @@ prometa a data exata — o pacote não controla esse relógio, a Shopee controla
 | `invalid_code`, ou "expirou" | o código vale 10 min e uma vez só | gere o link de novo e faça os dois passos seguidos |
 | **"Nao achei o code nesse endereco"**, e ela jura que autorizou | ela colou o endereço de **outra aba**, ou cortou a barra | o pacote já procura o código dentro de redirecionamento codificado. Peça a barra inteira, com os `%` e tudo |
 | A Shopee recusa a assinatura | `partner_id` e chave de ambientes diferentes | a chave de teste não funciona em produção, e vice-versa |
-| Conectou e caiu em 4 horas | não veio `refresh_token` | confira a autorização; sem ele a conexão não se renova |
+| Conectou e caiu em 4 horas | não veio `refresh_token` | confira a autorização; sem ele a conexão não se renova. **Se veio o refresh e ainda caiu**, confirme a renovação com `python3 shopee.py renovar` — até 06/11/2026 a renovação existia no código e não era chamada, e o pacote antigo caía em 4 h mesmo com refresh válido |
+| Quer saber se a renovação funciona, sem esperar 4 horas | presença de refresh não é prova: Partner Key com um espaço a mais só falha na primeira renovação | `python3 shopee.py renovar` — responde `renovacao funcionou`. O `python3 shopee.py check` mostra o estado sem renovar |
+| `Outra execucao esta renovando a credencial nesta pasta` | duas coisas rodando ao mesmo tempo na mesma pasta | **não é erro de conexão.** Espere a outra terminar. A trava existe para a renovação não acontecer duas vezes |
 | Caiu depois de semanas | passou de 30 dias sem uso | refazer a autorização. É esperado |
 | Caiu logo depois de funcionar | duas cópias usando a mesma credencial | **o refresh é de uso único.** Não copie `tokens-shopee.json` para outra máquina |
 
