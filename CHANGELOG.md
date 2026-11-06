@@ -23,6 +23,25 @@
 > 4. anotar a mudança aqui embaixo
 > 5. publicar pelo Cypher Guard
 
+## 1.8.1 — 6 de novembro de 2026
+
+**A lista de plugins voltou a ter um pacote só: o de leitura.**
+
+O `prometheus-acoes` — o pacote que **muda coisa** na conta — saiu da vitrine do marketplace.
+Ele continua existindo no repositório e volta para a lista depois da imersão de 11 e 12 de
+novembro.
+
+Por que: com os dois lado a lado, quem abria a lista via o de Ações marcado como novidade e
+instalava ele achando que era o de conexão — ficando **sem** as skills de conectar a conta, que
+são o que importa. Numa sala com cem pessoas, isso é erro garantido, e o texto do próprio
+pacote já dizia que instalar as ações **é uma decisão** — decisão não pode ser um clique a mais
+numa lista durante um evento.
+
+Nada mudou no pacote de leitura além do número da versão. E a trava do pacote de ações nunca
+dependeu disso: ele recusa qualquer escrita antes de sair da máquina quando falta a permissão
+daquela superfície — por isso ninguém que instalou por engano conseguiu alterar nada numa conta
+autorizada só para leitura.
+
 ## 1.8.0 — 6 de novembro de 2026
 
 **A conexão da Shopee parava de funcionar em quatro horas, e agora não para mais.**
