@@ -20,13 +20,28 @@ cross-vendor de 22/10/2026:
    copiou de outro lugar — e, no uso normal, pega o erro mais comum: colar a
    URL errada.
 
+4. Refresh token de uso unico + duas execucoes na mesma pasta = conexao morta
+   horas depois, parecendo falha de rede. `trava` da exclusao ENTRE PROCESSOS
+   para o trecho ler->renovar->gravar. Sem ela, comparar o refresh antes de
+   gravar nao e condicional de verdade: sobra corrida entre comparar e escrever.
+
 Compatibilidade: Python 3.8+, sem dependencia externa.
 """
+import contextlib
 import os
 import tempfile
+import threading
+import time
 import urllib.parse
 import urllib.request
 from pathlib import Path
+
+try:                      # POSIX (Mac, Linux)
+    import fcntl
+    _msvcrt = None
+except ImportError:       # Windows
+    fcntl = None
+    import msvcrt as _msvcrt
 
 
 class RedirecionamentoRecusado(RuntimeError):
@@ -88,6 +103,12 @@ def gravar_protegido(destino, conteudo):
     try:
         with os.fdopen(fd, "wb") as f:
             f.write(dados)
+            # Substituicao atomica garante que o destino nunca fica truncado,
+            # mas NAO garante que o conteudo novo chegou ao disco. Sem isto, uma
+            # queda de energia logo depois de renovar pode deixar o refresh
+            # antigo no disco — e ele ja foi consumido.
+            f.flush()
+            os.fsync(f.fileno())
         os.replace(tmp, str(destino))
     except BaseException:
         try:
@@ -160,3 +181,170 @@ def conferir_origem(endereco, cadastrado):
             "- nao o endereco de outra aba." % (resumo(cadastrado), resumo(endereco))
         )
     return True
+
+
+# --------------------------------------------------------------------- trava
+#
+# Exclusao entre processos para renovar credencial [LST-17861].
+#
+# Tres decisoes que parecem detalhe e nao sao:
+#
+# 1. A trava fica em arquivo PROPRIO, nunca no arquivo de segredo. O segredo e
+#    substituido por `os.replace` na gravacao atomica: travar o proprio arquivo
+#    perderia a trava junto com o inode, no meio do trecho protegido.
+# 2. O arquivo de trava NAO e apagado ao liberar. Apagar abre janela: outro
+#    processo cria um inode novo e entra junto.
+# 3. A trava NAO tem vencimento. Vencer enquanto o primeiro ainda espera a
+#    resposta do provedor e o mesmo que nao ter trava.
+
+
+class TravaOcupada(RuntimeError):
+    """Outra execucao esta renovando a credencial nesta pasta."""
+
+
+_abertas = {}
+_guarda = threading.Lock()
+
+
+def caminho_da_trava(credencial):
+    """Arquivo de trava correspondente a um arquivo de credencial."""
+    p = Path(credencial)
+    return p.parent / ("." + p.name + ".trava")
+
+
+def trava_em_uso(credencial):
+    """Diz se ESTE processo esta dentro da trava. Para testes e diagnostico."""
+    with _guarda:
+        return str(caminho_da_trava(credencial).resolve()) in _abertas
+
+
+def _tentar_travar(fd):
+    if fcntl is not None:
+        fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    else:
+        # Posicao e tamanho constantes: no Windows a regiao travada tem de ser
+        # sempre a mesma, senao dois processos travam regioes diferentes do
+        # mesmo arquivo e nenhum espera pelo outro.
+        os.lseek(fd, 0, os.SEEK_SET)
+        _msvcrt.locking(fd, _msvcrt.LK_NBLCK, 1)
+
+
+def _destravar(fd):
+    if fcntl is not None:
+        fcntl.flock(fd, fcntl.LOCK_UN)
+    else:
+        os.lseek(fd, 0, os.SEEK_SET)
+        _msvcrt.locking(fd, _msvcrt.LK_UNLCK, 1)
+
+
+@contextlib.contextmanager
+def _trava_real(credencial, timeout=30):
+    alvo = caminho_da_trava(credencial)
+    alvo.parent.mkdir(parents=True, exist_ok=True)
+    chave = str(alvo.resolve())
+
+    with _guarda:
+        estado = _abertas.get(chave)
+        if estado is not None:
+            # Reentrante: `renovar()` e o caminho forcado passam pela mesma
+            # trava. Sem isto o processo travaria a si mesmo.
+            estado[0] += 1
+            reentrou = True
+        else:
+            reentrou = False
+    if reentrou:
+        try:
+            yield
+        finally:
+            with _guarda:
+                estado = _abertas.get(chave)
+                if estado is not None:
+                    estado[0] -= 1
+        return
+
+    fd = os.open(str(alvo), os.O_CREAT | os.O_RDWR, 0o600)
+    limite = time.time() + max(0, timeout)
+    try:
+        while True:
+            try:
+                _tentar_travar(fd)
+                break
+            except OSError:
+                if time.time() >= limite:
+                    raise TravaOcupada(
+                        "Outra execucao esta renovando a credencial nesta pasta. "
+                        "Espere ela terminar e rode de novo — nao rode duas ao "
+                        "mesmo tempo na mesma pasta."
+                    )
+                time.sleep(0.1)
+        with _guarda:
+            _abertas[chave] = [1, fd]
+        try:
+            yield
+        finally:
+            with _guarda:
+                estado = _abertas.get(chave)
+                if estado is not None:
+                    estado[0] -= 1
+                    if estado[0] <= 0:
+                        _abertas.pop(chave, None)
+            _destravar(fd)
+    finally:
+        os.close(fd)
+
+
+def trava(credencial, timeout=30):
+    """Exclusao entre processos para o trecho ler->renovar->gravar.
+
+    Quem espera e entra depois deve RELER a credencial: normalmente o par ja
+    foi renovado por quem estava dentro, e mandar o refresh lido antes seria
+    mandar um token de uso unico ja consumido.
+
+    O arquivo de trava e separado, permanente e sem vencimento — ver o bloco de
+    comentarios acima para o porque de cada uma dessas tres coisas."""
+    return _trava_real(credencial, timeout)
+
+
+def pode_gravar(destino):
+    """Diz se a pasta aceita a gravacao atomica, SEM tocar no arquivo atual.
+
+    Serve para nao consumir um refresh de uso unico e descobrir depois que o par
+    novo nao tem onde ser guardado. Nao garante a gravacao futura — reduz a
+    falha previsivel (pasta sem permissao, caminho que nao existe, disco cheio
+    no momento da conferencia)."""
+    destino = Path(destino)
+    try:
+        destino.parent.mkdir(parents=True, exist_ok=True)
+        fd, tmp = tempfile.mkstemp(dir=str(destino.parent), prefix=".teste-")
+    except OSError:
+        return False
+    try:
+        with os.fdopen(fd, "wb") as f:
+            f.write(b"x")
+            f.flush()
+            os.fsync(f.fileno())
+        return True
+    except OSError:
+        return False
+    finally:
+        try:
+            os.unlink(tmp)
+        except OSError:
+            pass
+
+
+def gravar_insistindo(destino, conteudo, tentativas=3, espera=0.2):
+    """`gravar_protegido` com algumas tentativas.
+
+    Recebido um par valido do provedor, insistir na GRAVACAO e correto: o par ja
+    existe e perde-lo mata a conexao. Repetir a CHAMADA ao provedor, nunca — o
+    refresh e de uso unico."""
+    ultima = None
+    for n in range(max(1, tentativas)):
+        try:
+            return gravar_protegido(destino, conteudo)
+        except OSError as e:
+            ultima = e
+            if n + 1 < tentativas:
+                time.sleep(espera)
+    raise ultima
