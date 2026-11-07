@@ -33,7 +33,7 @@
 - [x] Serializar somente as três descrições como strings YAML válidas, preservando cada caractere decodificado e todo o restante do arquivo.
 - [x] Rodar teste novo, suíte completa e `claude plugin validate .`. Expected: teste novo e suíte passam; aviso de ícone conhecido não bloqueante no CLI.
 - [x] Comparar automaticamente os três textos com `git show` da base: nomes e corpo idênticos, descrição decodificada idêntica à descrição original. Expected: três preservados.
-- [ ] Revisar conformidade e qualidade em contexto independente, corrigir achados materiais necessários, registrar provas e commit com LST-17867. Entregar localmente; confirmação remota permanece pendente de publicação autorizada.
+- [x] Revisar conformidade e qualidade em contexto independente, corrigir achados materiais necessários, registrar provas e commit com LST-17867. Entregar localmente; confirmação remota permanece pendente de publicação autorizada.
 
 ## Desvios
 
@@ -46,4 +46,4 @@ Nenhum desvio de produto. A declaração da dependência de teste em `tests/requ
 - GREEN: 9/9 cabeçalhos válidos; suíte completa 447 passou em 13,25 s.
 - Nomes, descrições decodificadas e corpos idênticos à base.
 - Validador CLI passou; aviso preexistente ICON_MISSING.
-- Revisão independente pendente; nenhuma publicação.
+- Revisão independente de a0bf531 aprovada sem achados; nenhuma publicação. Provas em `2026-11-06-prometheus-skill-yaml-verification.md`.
