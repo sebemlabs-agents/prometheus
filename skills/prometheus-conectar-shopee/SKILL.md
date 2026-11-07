@@ -1,6 +1,6 @@
 ---
 name: prometheus-conectar-shopee
-description: Conecta a conta Shopee do usuário em somente leitura, na pasta dele, no mesmo molde da conexão com o Mercado Livre. Conduz a criação do aplicativo no Open Platform, a autorização assinada e a confirmação da loja. Use sempre que o usuário pedir para conectar, reconectar ou configurar a Shopee, ou quando uma skill do pacote precisar de dados da Shopee e não houver conexão. Use também quando ele relatar erro, travamento ou dúvida da Shopee em qualquer momento depois da instalação — "a Shopee recusou", "assinatura inválida", "o código expirou", "invalid_code", "caiu a conexão da Shopee". Não use para Mercado Livre: para isso existe a prometheus-conectar-meli.
+description: "Conecta a conta Shopee do usuário em somente leitura, na pasta dele, no mesmo molde da conexão com o Mercado Livre. Conduz a criação do aplicativo no Open Platform, a autorização assinada e a confirmação da loja. Use sempre que o usuário pedir para conectar, reconectar ou configurar a Shopee, ou quando uma skill do pacote precisar de dados da Shopee e não houver conexão. Use também quando ele relatar erro, travamento ou dúvida da Shopee em qualquer momento depois da instalação — \"a Shopee recusou\", \"assinatura inválida\", \"o código expirou\", \"invalid_code\", \"caiu a conexão da Shopee\". Não use para Mercado Livre: para isso existe a prometheus-conectar-meli."
 ---
 
 # Conectar a Shopee — pacote Prometheus

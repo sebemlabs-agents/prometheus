@@ -1,0 +1,5 @@
+# Somente desenvolvimento: as skills continuam sem dependências externas.
+pytest>=9.0.3,<10
+PyYAML>=6.0.3,<7
+# Dependência do pytest: evita as versões anteriores à correção do lexer ADL.
+Pygments>=2.20.0,<3
