@@ -35,6 +35,7 @@ tente adivinhar — errar o diagnóstico custa mais que admitir.
 | `winget` não existe nesta máquina | Windows 10 mais antigo, LTSC ou sem a Loja | **não é erro dela.** Plano B da etapa 0.2: ela baixa de `python.org/downloads`, versão 3.12, marcando **"Add python.exe to PATH"** na primeira tela e usando **"Install Now"** (não pede senha de administrador). Windows em ARM precisa da linha **arm64**, não do botão grande |
 | Instalou pelo site e o comando continua não existindo | a caixa "Add python.exe to PATH" não foi marcada | reabrir o instalador, escolher **Modify** e marcar. Ou use o caminho absoluto da etapa 0.3 |
 | `atualizacao.py` diz que não achou a pasta de configuração do Claude | a pessoa está no **Codex**, não no Claude | não é erro dela e não tem conserto: atualização automática é só do Claude. No Codex a atualização é manual — `codex plugin marketplace upgrade`. Diga isso e siga |
+| `atualizacao.py` diz "O pacote prometheus não está instalado" e ela jura que está | versão 1.8.1 ou anterior: o script só olhava o registro do terminal | peça para ela atualizar o pacote. Da 1.8.2 em diante ele reconhece a instalação pelo aplicativo. **Não mande desinstalar** |
 
 ## Três coisas que não são erro
 
@@ -82,7 +83,7 @@ Anthropic, não é defeito da máquina dela. Enquanto estiver assim, a pessoa fi
 dia em que instalou, para sempre, sem nenhum aviso.
 
 ```
-python3 atualizacao.py          # diz como está
+python3 atualizacao.py          # diz como está e em que versão ela está
 python3 atualizacao.py --ligar  # liga, depois de perguntar a ela
 ```
 
@@ -90,3 +91,15 @@ python3 atualizacao.py --ligar  # liga, depois de perguntar a ela
 
 Para trazer a versão nova agora, sem esperar: `claude plugin marketplace update prometheus` —
 este é o único caso em que vale pedir que ela rode algo, e só se ela estiver com pressa.
+
+### Se o script responder "quem controla é o aplicativo do Claude"
+
+Ela instalou **pela tela**, não pelo terminal — vitrine da conta ou envio de `.zip`. Nesse
+caminho não existe arquivo local para ligar: o botão fica em
+
+> Configurações → Plugins → prometheus → **"Sincronizar automaticamente"**
+
+Peça que ela ligue aí. O `--ligar` não serve e o script diz isso em vez de fingir que ligou.
+
+**Pacote enviado por `.zip` não se atualiza de jeito nenhum**, nem com o botão: aquela cópia
+fica parada na versão do arquivo. Depois do evento, ela troca pela instalação normal.

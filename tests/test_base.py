@@ -2572,3 +2572,171 @@ def test_check_mostra_a_url_de_retorno_porque_ela_nao_e_segredo(tmp_path, monkey
     assert s["chaves"]["MELI_REDIRECT_URI"] == "https://visivel.exemplo.com/"
     assert s["chaves"]["MELI_CLIENT_SECRET"] == "preenchido"
     assert s["chaves"]["MELI_APP_ID"] == "preenchido"
+
+
+# ------------------------------------------- atualizacao: instalado pelo app
+
+def _bucket_sincronizado(base, nome="4d4f44d8_c7f86fd7"):
+    b = base / "plugins" / "synced" / nome
+    b.mkdir(parents=True, exist_ok=True)
+    return b
+
+
+def _vitrine_sincronizada(base, linhas):
+    b = _bucket_sincronizado(base)
+    (b / ".marketplaces.json").write_text(
+        json.dumps({"rows": linhas, "parserVersion": 1002}), encoding="utf-8")
+    return b
+
+
+def _plugin_sincronizado(base, uuid, nome, versao):
+    b = _bucket_sincronizado(base)
+    manifesto = b / uuid / ".claude-plugin"
+    manifesto.mkdir(parents=True, exist_ok=True)
+    (manifesto / "plugin.json").write_text(
+        json.dumps({"name": nome, "version": versao}), encoding="utf-8")
+    return b
+
+
+def test_instalado_pelo_app_nao_pode_dizer_nao_instalado(tmp_path):
+    base = _base_falsa(tmp_path, registrado=False)
+    _vitrine_sincronizada(base, [
+        {"name": "prometheus", "scope": "account",
+         "source": {"source": "github", "repo": "sebemlabs-agents/prometheus"}},
+    ])
+    assert atualizacao.estado(base) == "pelo app"
+
+
+def test_pacote_enviado_por_arquivo_tambem_conta_como_app(tmp_path):
+    # Envio de .zip entra na vitrine "My Uploads" com o plugin em pasta de UUID:
+    # o nome de verdade so aparece no plugin.json de dentro.
+    base = _base_falsa(tmp_path, registrado=False)
+    _vitrine_sincronizada(base, [
+        {"name": "My Uploads", "scope": "account", "source": {"source": "claudeai"}},
+    ])
+    _plugin_sincronizado(base, "28339e4b-bbbb-457e-98b0-d2ec7d56704f",
+                         "prometheus", "1.8.1")
+    assert atualizacao.estado(base) == "pelo app"
+
+
+def test_app_com_outros_pacotes_e_sem_o_nosso_segue_nao_instalado(tmp_path):
+    base = _base_falsa(tmp_path, registrado=False)
+    _vitrine_sincronizada(base, [
+        {"name": "anthropic-plugin-directory", "scope": "default",
+         "source": {"source": "claudeai"}},
+    ])
+    _plugin_sincronizado(base, "f30ae545-c6c3-415a-9e15-33ea453032cb",
+                         "productivity", "1.3.1")
+    assert atualizacao.estado(base) == "nao instalado"
+
+
+def test_instalacao_pelo_terminal_manda_mais_que_a_do_app(tmp_path):
+    # Quem tem as duas: o terminal e o unico que o script consegue ligar.
+    base = _base_falsa(tmp_path, auto=True)
+    _vitrine_sincronizada(base, [
+        {"name": "prometheus", "scope": "account",
+         "source": {"source": "github", "repo": "sebemlabs-agents/prometheus"}},
+    ])
+    assert atualizacao.estado(base) == "ligada"
+
+
+def test_ligar_no_app_explica_a_tela_em_vez_de_mandar_instalar(tmp_path):
+    base = _base_falsa(tmp_path, registrado=False)
+    _vitrine_sincronizada(base, [
+        {"name": "prometheus", "scope": "account",
+         "source": {"source": "github", "repo": "sebemlabs-agents/prometheus"}},
+    ])
+    with pytest.raises(atualizacao.GerenciadoPeloApp) as erro:
+        atualizacao.ligar(base)
+    recado = str(erro.value)
+    assert "Sincronizar automaticamente" in recado
+    assert "Instale o pacote primeiro" not in recado
+
+
+def test_versao_instalada_vem_do_registro_do_terminal(tmp_path):
+    base = _base_falsa(tmp_path)
+    (base / "plugins" / "installed_plugins.json").write_text(json.dumps({
+        "version": 2,
+        "plugins": {"prometheus@prometheus": [
+            {"scope": "user", "version": "1.8.1",
+             "installPath": "/x/cache/prometheus/prometheus/1.8.1"}]},
+    }), encoding="utf-8")
+    assert atualizacao.versao_instalada(base) == "1.8.1"
+
+
+def test_versao_instalada_cai_para_a_copia_da_vitrine(tmp_path):
+    # Sem registro de instalado: vale a copia que o terminal clonou.
+    base = _base_falsa(tmp_path)
+    copia = base / "plugins" / "marketplaces" / "prometheus" / ".claude-plugin"
+    copia.mkdir(parents=True)
+    (copia / "plugin.json").write_text(
+        json.dumps({"name": "prometheus", "version": "1.8.1"}), encoding="utf-8")
+    assert atualizacao.versao_instalada(base) == "1.8.1"
+
+
+def test_versao_instalada_vem_da_pasta_do_app(tmp_path):
+    base = _base_falsa(tmp_path, registrado=False)
+    _plugin_sincronizado(base, "28339e4b-bbbb-457e-98b0-d2ec7d56704f",
+                         "prometheus", "1.7.0")
+    assert atualizacao.versao_instalada(base) == "1.7.0"
+
+
+def test_versao_instalada_nao_inventa_quando_nao_sabe(tmp_path):
+    assert atualizacao.versao_instalada(_base_falsa(tmp_path)) is None
+
+
+def test_synced_quebrado_nao_derruba_o_script(tmp_path):
+    base = _base_falsa(tmp_path, registrado=False)
+    b = _bucket_sincronizado(base)
+    (b / ".marketplaces.json").write_text("{isso nao e json", encoding="utf-8")
+    assert atualizacao.estado(base) == "nao instalado"
+
+
+def _rodar_atualizacao(monkeypatch, capsys, base, *args):
+    monkeypatch.setattr(atualizacao, "pasta_config", lambda: base)
+    monkeypatch.setattr(sys, "argv", ["atualizacao.py"] + list(args))
+    codigo = atualizacao._main()
+    return codigo, capsys.readouterr().out
+
+
+def test_saida_do_app_nao_assusta_e_aponta_a_tela(tmp_path, monkeypatch, capsys):
+    base = _base_falsa(tmp_path, registrado=False)
+    _vitrine_sincronizada(base, [
+        {"name": "prometheus", "scope": "account",
+         "source": {"source": "github", "repo": "sebemlabs-agents/prometheus"}},
+    ])
+    _plugin_sincronizado(base, "28339e4b-bbbb-457e-98b0-d2ec7d56704f",
+                         "prometheus", "1.7.0")
+    codigo, saida = _rodar_atualizacao(monkeypatch, capsys, base)
+    assert codigo == 0
+    assert "nao esta instalado" not in saida
+    assert "Sincronizar automaticamente" in saida
+    assert "1.7.0" in saida
+
+
+def test_ligar_no_app_nao_estoura_e_explica(tmp_path, monkeypatch, capsys):
+    base = _base_falsa(tmp_path, registrado=False)
+    _vitrine_sincronizada(base, [
+        {"name": "prometheus", "scope": "account", "source": {"source": "github"}},
+    ])
+    codigo, saida = _rodar_atualizacao(monkeypatch, capsys, base, "--ligar")
+    assert codigo == 0
+    assert "Sincronizar automaticamente" in saida
+
+
+def test_saida_do_terminal_mostra_a_versao(tmp_path, monkeypatch, capsys):
+    base = _base_falsa(tmp_path, auto=True)
+    (base / "plugins" / "installed_plugins.json").write_text(json.dumps({
+        "plugins": {"prometheus@prometheus": [{"version": "1.8.1"}]}}),
+        encoding="utf-8")
+    codigo, saida = _rodar_atualizacao(monkeypatch, capsys, base)
+    assert codigo == 0
+    assert "LIGADA" in saida
+    assert "1.8.1" in saida
+
+
+def test_sem_instalacao_nenhuma_continua_avisando(tmp_path, monkeypatch, capsys):
+    base = _base_falsa(tmp_path, registrado=False)
+    codigo, saida = _rodar_atualizacao(monkeypatch, capsys, base)
+    assert codigo == 1
+    assert "nao esta instalado" in saida

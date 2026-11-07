@@ -23,6 +23,35 @@
 > 4. anotar a mudança aqui embaixo
 > 5. publicar pelo Cypher Guard
 
+## 1.8.2 — 6 de novembro de 2026
+
+**Quem instalou pelo aplicativo ouvia que não tinha instalado nada.**
+
+O `atualizacao.py` só sabia olhar o registro do terminal (`~/.claude/settings.json` e
+`known_marketplaces.json`). Quem instalou pela tela do Claude — vitrine da conta ou envio de
+`.zip` — tem o pacote registrado em outro lugar: `~/.claude/plugins/synced/<conta>/`, com um
+`.marketplaces.json` e o pacote dentro de uma pasta de **UUID**, onde o nome de verdade só
+aparece no `plugin.json` de dentro.
+
+Resultado: o script respondia **"O pacote prometheus não está instalado nesta máquina"** para
+quem estava com ele instalado e funcionando. No meio de um evento, essa frase manda a pessoa
+desinstalar e instalar de novo o que já estava certo.
+
+Agora o script enxerga os dois caminhos:
+
+- **terminal:** continua igual — lê e liga sozinho.
+- **aplicativo:** reconhece, diz que quem controla é a tela e aponta o caminho exato
+  (Configurações → Plugins → prometheus → "Sincronizar automaticamente"). Não existe arquivo
+  local de `autoUpdate` nesse caminho; prometer que liga seria mentira.
+
+Quem tem os dois recebe a resposta do terminal, que é a que o script consegue mudar.
+
+Além disso, as três saídas agora dizem **em que versão a pessoa está** — lido do
+`installed_plugins.json`, da cópia da vitrine ou da pasta do aplicativo, nessa ordem. Era a
+informação que faltava para saber se uma correção publicada chegou.
+
+Nada mudou nas skills nem na conexão de conta.
+
 ## 1.8.1 — 6 de novembro de 2026
 
 **A lista de plugins voltou a ter um pacote só: o de leitura.**
