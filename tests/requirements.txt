@@ -1,0 +1,3 @@
+# Somente desenvolvimento: as skills continuam sem dependências externas.
+pytest>=7,<9
+PyYAML>=6,<7

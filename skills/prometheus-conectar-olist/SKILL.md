@@ -1,6 +1,6 @@
 ---
 name: prometheus-conectar-olist
-description: Conecta o ERP Olist (Tiny) em somente leitura e importa o CUSTO dos produtos para a pasta do usuário — o dado que nenhum marketplace entrega e sem o qual a margem não fecha. Use quando o usuário pedir para conectar a Olist ou o Tiny, quando ele disser que usa o ERP, ou quando uma skill precisar de custo e não houver planilha. Use também quando ele relatar erro, conexão vencida ou dúvida da Olist — "a Olist pediu para reconectar", "deu 401", "estourou o limite", "invalid_grant". Não use para Mercado Livre nem Shopee: cada um tem a sua skill.
+description: "Conecta o ERP Olist (Tiny) em somente leitura e importa o CUSTO dos produtos para a pasta do usuário — o dado que nenhum marketplace entrega e sem o qual a margem não fecha. Use quando o usuário pedir para conectar a Olist ou o Tiny, quando ele disser que usa o ERP, ou quando uma skill precisar de custo e não houver planilha. Use também quando ele relatar erro, conexão vencida ou dúvida da Olist — \"a Olist pediu para reconectar\", \"deu 401\", \"estourou o limite\", \"invalid_grant\". Não use para Mercado Livre nem Shopee: cada um tem a sua skill."
 ---
 
 # Conectar a Olist — o custo que falta na margem
