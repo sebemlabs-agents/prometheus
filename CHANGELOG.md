@@ -23,6 +23,22 @@
 > 4. anotar a mudança aqui embaixo
 > 5. publicar pelo Cypher Guard
 
+## 1.8.3 — 7 de novembro de 2026
+
+**As descrições das três skills de conexão agora têm cabeçalhos YAML válidos.**
+
+Meli, Olist e Shopee tinham dois-pontos no texto da descrição sem as aspas exigidas
+pelo formato. Um leitor YAML estrito rejeitava essas três skills, embora a validação
+do catálogo pelo Claude Code passasse. As descrições agora estão entre aspas, sem
+mudar o texto nem as instruções das skills.
+
+Um teste novo verifica os cabeçalhos reais das nove skills para evitar a repetição.
+Sua dependência de YAML é exclusiva dos testes; o participante não precisa instalar
+nada a mais. A correção do verificador de atualizações da versão 1.8.2 foi preservada.
+
+O defeito de formato foi comprovado e corrigido. A relação com a mensagem de falha
+de sincronização na interface ainda precisa ser validada em uma conta afetada.
+
 ## 1.8.2 — 6 de novembro de 2026
 
 **Quem instalou pelo aplicativo ouvia que não tinha instalado nada.**

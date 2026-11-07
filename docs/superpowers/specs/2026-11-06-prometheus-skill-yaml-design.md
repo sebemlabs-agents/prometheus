@@ -2,6 +2,20 @@
 
 Status: **aprovada por Marvin nesta sessão** para implementação local.
 
+## Autorização posterior de publicação
+
+Marvin autorizou publicar em 07/11/2026, após a revisão independente e o parecer
+do Claude. A autorização inclui integrar esta correção na principal e distribuí-la
+como 1.8.3, incrementando os dois manifestos e registrando o changelog. Preservam-se
+o contrato funcional abaixo, a correção 1.8.2 e os gates de publicação. Os limites
+de entrega somente local descritos abaixo registram a etapa anterior; deixam de
+impedir este rollout autorizado. O PR #17 e as capacidades de Ações ficam fora.
+
+Verificação do rollout: suíte completa e catálogo válidos, versões concordantes,
+principal remota confirmada após integração e nove cabeçalhos válidos no pacote
+obtido do commit publicado. O teste na interface/conta afetada permanece pendente;
+a publicação, por si só, não comprova a solução da falha de sincronização.
+
 ## Objetivo e contexto comprovado
 
 Eliminar YAML inválido nas descrições de `prometheus-conectar-meli`, `prometheus-conectar-olist` e `prometheus-conectar-shopee`. Na versão 1.8.1, `claude plugin validate` aprovava o catálogo, mas PyYAML 6.0.3 rejeitava essas três skills por `: ` em escalares sem aspas. A base atual é `origin/main` em `d603599306682223f4a3ebfd2ef2975f6086203b` (1.8.2), que já contém a correção independente do verificador de atualização, e ainda contém os três cabeçalhos inválidos.
@@ -33,3 +47,9 @@ Entrega em branch/worktree Codex própria. Publicação posterior exige nova aut
 ## Desvios
 
 Nenhuma mudança de produto. Base atualizada para incorporar LST-17866 já integrado. Declaração de PyYAML apenas nas dependências de desenvolvimento é detalhe técnico necessário para o teste reproduzível.
+
+- Requisito: dependências de teste verificadas antes da publicação. Mudança:
+  pytest >=9.0.3, PyYAML >=6.0.3 e Pygments >=2.20.0, com Python >=3.10 somente
+  para desenvolvimento. Motivo: auditoria OSV encontrou CVE-2025-71176 no pytest
+  8.4.2 e CVE-2026-4539 no Pygments 2.19.2 do ambiente anterior. Ajuste técnico
+  dentro do contrato; nenhum requisito ou dependência de execução do participante muda.
