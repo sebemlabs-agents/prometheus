@@ -23,6 +23,22 @@
 > 4. anotar a mudança aqui embaixo
 > 5. publicar pelo Cypher Guard
 
+## 1.8.4 — 7 de novembro de 2026
+
+**O complemento de Ações saiu do repositório para não impedir a instalação.**
+
+O claude.ai obtinha a versão 1.8.3, mas rejeitava o pacote com o código
+`marketplace_sync_multiple_manifests`: além do manifesto na raiz, encontrava
+`acoes/.claude-plugin/plugin.json` dentro dele. Esconder Ações da vitrine não
+bastava, pois o conteúdo ainda era parte do pacote de leitura.
+
+Agora há somente um plugin neste repositório. As fontes e os testes de Ações
+foram preservados no histórico para uma distribuição separada futura. As nove
+skills, os scripts de leitura e o verificador de atualizações não mudaram.
+
+Um teste novo rejeita manifestos aninhados. As garantias de leitura que estavam
+no arquivo de testes de Ações foram mantidas nos testes do pacote principal.
+
 ## 1.8.3 — 7 de novembro de 2026
 
 **As descrições das três skills de conexão agora têm cabeçalhos YAML válidos.**
