@@ -18,3 +18,8 @@ CVE-2026-4539, respectivamente. Os scripts do participante não mudaram.
 O teste de cabeçalhos complementa `claude plugin validate .`, que aprovava o
 catálogo mesmo com três descrições YAML inválidas. Passar nesses testes não
 comprova a sincronização do marketplace na interface remota do Claude.
+
+O teste de estrutura em `test_plugin_package.py` examina os arquivos presentes
+na pasta do plugin, incluindo arquivos locais não versionados. Rode em checkout
+limpo ou no pacote extraído; antes de publicar, confira também o arquivo gerado
+do commit Git e, depois, o pacote obtido da principal remota.
