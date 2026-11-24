@@ -116,7 +116,9 @@ secreta, **pare**: o pedido não precisa de nenhum deles.
 4. **Anote a data de hoje e pare aqui.** Não é erro: a análise leva **até 10 dias** e
    **pode não ser aprovada**. Peça para ela guardar a data e a conta usada no pedido.
 5. **Quando a pessoa voltar** ("o ML aprovou", "apareceu a aplicação", ou só retomando a
-   conversa): **não recomece.** Pergunte a data do pedido e peça que abra
+   conversa): **não recomece.** Pergunte a data do pedido e **se o Mercado Livre respondeu**.
+   **Recusou:** pare aqui e oriente ("Se o pedido foi recusado"); não olhe lista nem botão para
+   seguir a conexão. Aprovou ou não respondeu: peça que abra
    `https://developers.mercadolivre.com.br/devcenter` com a **mesma conta**. Olhe **primeiro a
    lista**, depois o botão:
    - **A aplicação apareceu na lista:** confirme que ela **nasceu desse pedido** (não existia antes
@@ -129,7 +131,6 @@ secreta, **pare**: o pedido não precisa de nenhum deles.
      a conta e o apelido são os do pedido. Dentro de 10 dias, só aguardar; passou, releia com ela a
      página oficial, para ver se o processo mudou. Não conhecemos canal oficial de acompanhamento:
      não mande reenviar por conta própria nem prometa prazo novo.
-   - **Recusado:** pare e oriente ("Se o pedido foi recusado", logo abaixo).
 
    Depois de configurada, siga para as credenciais (etapa 4 do `SKILL.md`).
 
@@ -144,8 +145,8 @@ do Mercado Livre e oriente, sem adivinhar o motivo:
 1. Se o Mercado Livre disse o motivo, siga o que ele pediu. Se não disse, peça para a pessoa
    perguntar ao suporte do Mercado Livre, logada na conta do pedido.
 2. Confira com ela o que se sabe: a conta é a **dona da operação**, os dados do titular **não estão
-   pendentes** e ela **nunca criou aplicação**. Se já criou e ela ainda existe, vá para
-   "Reaproveitar".
+   pendentes** e ela **nunca criou aplicação**. Se já criou e ela ainda existe, **diga que existe** o caminho de
+   reaproveitar a própria aplicação, e só siga por ele se a pessoa pedir.
 3. Não mande reenviar o pedido sem corrigir o motivo ou sem o Mercado Livre orientar, e não
    prometa que um novo pedido passa.
 4. A pasta e o `credenciais.txt` ficam guardados: quando houver aplicação, ela volta e a conexão
@@ -160,8 +161,9 @@ aplicação. Os campos abaixo são os da tela de antes de 16/11/2026; se mudaram
 - **Descrição:** a mesma do formulário.
 - **Logo:** era obrigatória e tinha de ser **PNG** (WebP era recusado). Avise antes.
 
-Faça na própria tela de criação os itens 3 a 7 da seção seguinte (URL, interruptores, permissões,
-salvar). Depois leia "Depois de salvar", de onde saem App ID e chave secreta. Se a lista já mostrar
+Faça na própria tela de criação os itens 3 a 6 da seção seguinte (URL, interruptores, permissões) e
+salve **uma vez**. **Deu erro? Não clique em salvar de novo:** abra a lista em outra aba e veja se a
+aplicação já está lá. Só repita se não estiver. Depois leia "Depois de salvar", de onde saem App ID e chave secreta. Se a lista já mostrar
 a aplicação, ela foi criada, mesmo que o salvar tenha dado erro: **abra essa, não crie outra**.
 
 ### No DevCenter (depois da aprovação)
@@ -234,7 +236,8 @@ a aplicação, ela foi criada, mesmo que o salvar tenha dado erro: **abra essa, 
    use a mesma `.invalid`.
 
 7. **Salvar.** **Às vezes dá erro na primeira tentativa.** Clicar de novo costuma
-   resolver — avise antes, senão ela acha que preencheu algo errado e começa a desfazer.
+   resolver — avise antes, senão ela acha que preencheu algo errado e começa a desfazer. (Isto é para
+   aplicação que já existe; **ao criar**, confira a lista antes de repetir.)
 
 ### Depois de salvar — a parte que surpreende todo mundo
 
@@ -318,7 +321,7 @@ depois, parecendo falha de rede.
 
 | O que aparece | O que é | O que fazer |
 |---|---|---|
-| Pediu pelo formulário, mas já tinha criado aplicação antes | o pedido é só para quem nunca criou, e a tela não avisa | use a que já existe (seção "Reaproveitar"); se não sobrou nenhuma, veja "Se o pedido foi recusado" (ou espere, se ainda está em análise) |
+| Pediu pelo formulário, mas já tinha criado aplicação antes | o pedido é só para quem nunca criou, e a tela não avisa | use a que já existe (seção "Reaproveitar"); se não sobrou nenhuma, veja "Se o pedido foi recusado" (ou espere, se ainda está em análise; se foi aprovado, siga o passo 5 do formulário) |
 | "your client callback has to match with the redirect_uri param" | a URL do `credenciais.txt` não é idêntica à cadastrada | compare caractere por caractere, inclusive barra final |
 | `invalid_operator_user_id` | autorizou com conta de operador | repita com a conta administradora |
 | `403 PA_UNAUTHORIZED_RESULT_FROM_POLICIES` | falta permissão funcional | confira as quatro, dê *Leitura* só às que estão em *Sem acesso*, sem baixar nenhuma, salve e autorize de novo. Se o recurso não aparece ou não deixa mudar, veja o aviso das Permissões |
