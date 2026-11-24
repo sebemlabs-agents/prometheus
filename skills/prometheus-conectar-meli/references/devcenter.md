@@ -72,8 +72,11 @@ Forms, está **em inglês** e o endereço é `https://forms.gle/2Q39SStHLJNQLjuK
      aplicação só vai ler a conta dela). *Business or third-party use* é para quem deixa
      outras pessoas conectarem contas: não é o caso.
    - **What is the intended use of the application?** (a segunda — o título se repete, mas
-     agora são as **funções**) — **View metrics and reports**. As outras são de escrita ou de
-     outros setores.
+     agora são as **funções**) — **Manage sales**, a mais versátil (pedidos são a base do
+     pacote). **Todo mundo marca a mesma.** Processo novo (16/11/2026): **não se sabe** se a
+     função escolhida limita os escopos depois da aprovação. Diga isso à pessoa; se, aprovada,
+     faltar permissão no DevCenter, é a hora de descobrir como ampliar (suporte do ML).
+     *Manage product listings* é a mais estreita: evite.
    - **Describe what the application will do.** — aceita português. Sugira: `Painel de
      leitura dos meus próprios dados de vendedor — pedidos, anúncios e promoções da minha
      conta. Não publica e não altera anúncio nem preço.`
