@@ -350,7 +350,7 @@ um bloco no painel. **Skill ausente não é erro.**
 
 ### 7. Quando não dá para conectar
 
-Se o usuário não conseguir ter a aplicação — pedido recusado, limite da conta, dados do titular pendentes de
+Se o usuário não conseguir ter a aplicação — limite da conta, dados do titular pendentes de
 validação, conta de operador, domínio bloqueado pelo administrador, ou aplicativo de produção
 que ele não quer mexer — **não insista e não trave a conversa**. Ele segue no modo
 demonstração: as skills rodam com dados preparados, o painel marca isso de forma visível e
@@ -361,6 +361,10 @@ Nunca apresente dado de demonstração como se fosse da conta dele.
 **Pedido feito e ainda em análise (até 10 dias) não é este caso:** não há modo demonstração
 nem aplicação emprestada. A pessoa para ali e retoma quando a aplicação aparecer (`devcenter.md`,
 passo 5 do formulário).
+
+**Pedido recusado pelo Mercado Livre também não é este caso:** não há modo demonstração nem
+aplicação emprestada. Pare a conexão ali e oriente (`devcenter.md`, "Se o pedido foi recusado").
+Isso vale mesmo que também caiba outro caso da lista acima.
 
 ### 8. Deixar o pacote se atualizar sozinho
 

@@ -40,6 +40,7 @@ vem criada. A skill `prometheus-conectar-meli` foi ajustada a isso:
   escolhida limita os escopos depois da aprovação; o guia diz isso à pessoa e, se faltar
   permissão no DevCenter, trata como possível limite da função, não como erro dela.
 - Pedido em análise **não** leva ao modo demonstração: a pessoa para e retoma quando aprovar.
+- Pedido **recusado** também não leva ao modo demonstração: o guia para e orienta o que conferir.
 
 - **Quem já tem aplicação** reaproveita a que existe, sem baixar permissão nem desligar nada
   que o ERP use. O guia não manda mais criar uma segunda.

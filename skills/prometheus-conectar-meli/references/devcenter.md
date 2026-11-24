@@ -27,7 +27,8 @@ funcionais" (developers.mercadolivre.com.br).
   financeiro da loja — normalmente é a administradora.
 - Se os dados do titular estiverem **pendentes de validação** no Mercado Livre, o pedido pode
   não ser aprovado. Peça para regularizar antes de pedir. Se não der, vá para o modo demonstração
-  e ele resolve depois. Pedido **já enviado e em análise** só espera: não é demonstração.
+  e ele resolve depois. Pedido **já enviado** não é demonstração: em análise, espera; recusado, para
+  e orienta.
 - **Quem nunca criou aplicação: peça hoje.** A análise leva até 10 dias e nada do DevCenter
   em diante funciona antes dela. O resto (pasta, `credenciais.txt`, URL de retorno) dá para
   deixar pronto enquanto espera.
@@ -110,11 +111,26 @@ Forms, está **em inglês** e o endereço é `https://forms.gle/2Q39SStHLJNQLjuK
    (depois da aprovação)" abaixo e depois para as credenciais (etapa 4 do `SKILL.md`). Não
    apareceu: dentro de 10 dias, só aguardar; passou, conferir se a
    conta e o apelido estavam certos. Não conhecemos canal oficial de acompanhamento: não mande
-   reenviar por conta própria nem prometa prazo novo. **Recusado:** modo demonstração (etapa 7 do
-   `SKILL.md`).
+   reenviar por conta própria nem prometa prazo novo. **Recusado:** pare e
+   oriente ("Se o pedido foi recusado", logo abaixo).
 
 Enquanto espera, **dá para deixar pronto tudo o que não depende da aprovação**: a pasta, o
 `credenciais.txt` e a URL de retorno.
+
+### Se o pedido foi recusado
+
+**Pare a conexão aqui.** Não há modo demonstração nem aplicação emprestada. Diga que a decisão é
+do Mercado Livre e oriente, sem adivinhar o motivo:
+
+1. Se o Mercado Livre disse o motivo, siga o que ele pediu. Se não disse, peça para a pessoa
+   perguntar ao suporte do Mercado Livre, logada na conta do pedido.
+2. Confira com ela o que se sabe: a conta é a **dona da operação**, os dados do titular **não estão
+   pendentes** e ela **nunca criou aplicação**. Se já criou e ela ainda existe, vá para
+   "Reaproveitar".
+3. Não mande reenviar o pedido sem corrigir o motivo ou sem o Mercado Livre orientar, e não
+   prometa que um novo pedido passa.
+4. A pasta e o `credenciais.txt` ficam guardados: quando houver aplicação, ela volta e a conexão
+   continua dali.
 
 ### No DevCenter (depois da aprovação)
 
@@ -272,7 +288,7 @@ depois, parecendo falha de rede.
 
 | O que aparece | O que é | O que fazer |
 |---|---|---|
-| Pediu pelo formulário, mas já tinha criado aplicação antes | o pedido é só para quem nunca criou, e a tela não avisa | use a que já existe (seção "Reaproveitar"); se não sobrou nenhuma, modo demonstração |
+| Pediu pelo formulário, mas já tinha criado aplicação antes | o pedido é só para quem nunca criou, e a tela não avisa | use a que já existe (seção "Reaproveitar"); se não sobrou nenhuma, veja "Se o pedido foi recusado" (ou espere, se ainda está em análise) |
 | "your client callback has to match with the redirect_uri param" | a URL do `credenciais.txt` não é idêntica à cadastrada | compare caractere por caractere, inclusive barra final |
 | `invalid_operator_user_id` | autorizou com conta de operador | repita com a conta administradora |
 | `403 PA_UNAUTHORIZED_RESULT_FROM_POLICIES` | falta permissão funcional | confira as quatro, dê *Leitura* só às que estão em *Sem acesso*, sem baixar nenhuma, salve e autorize de novo. Se o recurso não aparece ou não deixa mudar, veja o aviso das Permissões |
