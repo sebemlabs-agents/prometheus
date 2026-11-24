@@ -263,15 +263,16 @@ marcada. Ela constrói tudo igual e conecta depois.
 pergunte se já tem aplicação no DevCenter.
 
 - **Já mandou o pedido:** não recomece e não mande outro. Vá direto ao passo 5 do formulário em
-  `references/devcenter.md`. Antes de seguir, confirme que a aplicação da lista **nasceu
-  desse pedido** (não existia antes e traz a URL do `credenciais.txt`) e que nenhum sistema usa
-  ela: aí siga em "No DevCenter (depois da aprovação)". Em dúvida, ou se um ERP usa, vá para
-  "Reaproveitar".
+  `references/devcenter.md`. São três situações: a aplicação **apareceu na lista** (confirme que
+  **nasceu desse pedido**, porque não existia antes e traz a URL do `credenciais.txt`, e que nenhum
+  sistema usa ela; em dúvida, ou se um ERP usa, "Reaproveitar"), o **botão de criar foi liberado**
+  (cria uma só), ou **nada ainda** (aguarda).
 - **Não tem, ou não sabe:** olhe a lista do DevCenter e pergunte se ele já criou alguma antes
   (lista vazia não prova que nunca criou). Se já criou e apagou, o formulário não atende: etapa 7.
   Se nunca criou, **desde 16/11/2026 ele não cria sozinho**: siga `references/devcenter.md`, parte
-  "Quem nunca criou aplicação", que é o **formulário** do Mercado Livre — eles analisam em
-  até 10 dias e, **se aprovarem**, criam. Enviar não garante aprovação. Faça o pedido **no mesmo dia** e deixe pasta e `credenciais.txt` prontos enquanto
+  "Quem nunca criou aplicação", que leva à **página oficial** do Mercado Livre e ao **formulário**
+  dela — eles analisam em até 10 dias e, **se aprovarem**, criam ou liberam a criação. Mande pela
+  página, não por um link de formulário direto, que pode mudar. Enviar não garante aprovação. Faça o pedido **no mesmo dia** e deixe pasta e `credenciais.txt` prontos enquanto
   espera. Ele faz os cliques, você explica. Na função do formulário, **Manage sales** é o foco
   da imersão (detalhe e o que dizer sobre outras no `devcenter.md`).
 - **Já tem** (porque integra ERP, por exemplo): vá na seção "Reaproveitar uma aplicação que já
@@ -359,7 +360,7 @@ permanente, e ele constrói tudo igual. Depois resolve a aplicação com calma.
 Nunca apresente dado de demonstração como se fosse da conta dele.
 
 **Pedido feito e ainda em análise (até 10 dias) não é este caso:** não há modo demonstração
-nem aplicação emprestada. A pessoa para ali e retoma quando a aplicação aparecer (`devcenter.md`,
+nem aplicação emprestada. A pessoa para ali e retoma quando a aplicação aparecer ou a criação for liberada (`devcenter.md`,
 passo 5 do formulário).
 
 **Pedido recusado pelo Mercado Livre também não é este caso:** não há modo demonstração nem

@@ -23,6 +23,17 @@
 > 4. anotar a mudança aqui embaixo
 > 5. publicar pelo Cypher Guard
 
+## 1.8.6 — 24 de novembro de 2026
+
+**O guia manda à página oficial do Mercado Livre e aceita os dois desfechos da aprovação.**
+
+- O caminho do pedido é a página *Crie uma aplicação*, onde fica o link do formulário. O endereço
+  direto virou reserva: se o Mercado Livre trocar o formulário, o guia não quebra.
+- Se as perguntas do formulário mudarem, o guia lê com a pessoa o que está na tela.
+- **Depois da aprovação:** o formulário diz que a aplicação já vem criada; a página oficial diz que
+  a pessoa recebe acesso para criar. Na volta, o guia confere a lista e depois o botão de criar,
+  e cobre os dois casos sem criar aplicação duplicada.
+
 ## 1.8.5 — 24 de novembro de 2026
 
 **Quem nunca criou aplicação no Mercado Livre agora é guiado pelo formulário.**
