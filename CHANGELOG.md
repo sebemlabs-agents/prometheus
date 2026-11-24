@@ -23,6 +23,26 @@
 > 4. anotar a mudança aqui embaixo
 > 5. publicar pelo Cypher Guard
 
+## 1.8.5 — 24 de novembro de 2026
+
+**Quem nunca criou aplicação no Mercado Livre agora é guiado pelo formulário.**
+
+Desde 16/11/2026 o Mercado Livre não deixa mais quem nunca criou aplicação criá-la sozinho no
+DevCenter: o pedido é por formulário, a análise leva até 10 dias e, aprovada, a aplicação já
+vem criada. A skill `prometheus-conectar-meli` foi ajustada a isso, só em texto:
+
+- Quem **nunca criou** é levado ao formulário (passo a passo, campo a campo), pede no mesmo
+  dia e deixa pasta e `credenciais.txt` prontos enquanto espera.
+- Quem **já tem** aplicação segue direto para a conexão, como antes.
+- **Retomada depois da espera:** quando a pessoa volta, o guia não recomeça — confere se a
+  aplicação apareceu no DevCenter e continua dali.
+- **Função do formulário:** o foco da imersão é *Manage sales*. Ainda não se sabe se a função
+  escolhida limita os escopos depois da aprovação; o guia diz isso à pessoa e, se faltar
+  permissão no DevCenter, trata como possível limite da função, não como erro dela.
+- Pedido em análise **não** leva ao modo demonstração: a pessoa para e retoma quando aprovar.
+
+Nenhum script, cabeçalho de skill ou manifesto mudou além do número da versão.
+
 ## 1.8.4 — 7 de novembro de 2026
 
 **O complemento de Ações saiu do repositório para não impedir a instalação.**
