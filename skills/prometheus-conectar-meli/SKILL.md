@@ -343,13 +343,17 @@ um bloco no painel. **Skill ausente não é erro.**
 
 ### 7. Quando não dá para conectar
 
-Se o usuário não conseguir ter a aplicação — pedido ainda em análise (até 10 dias), pedido recusado, limite da conta, dados do titular pendentes de
+Se o usuário não conseguir ter a aplicação — pedido recusado, limite da conta, dados do titular pendentes de
 validação, conta de operador, domínio bloqueado pelo administrador, ou aplicativo de produção
 que ele não quer mexer — **não insista e não trave a conversa**. Ele segue no modo
 demonstração: as skills rodam com dados preparados, o painel marca isso de forma visível e
 permanente, e ele constrói tudo igual. Depois cria a aplicação com calma.
 
 Nunca apresente dado de demonstração como se fosse da conta dele.
+
+**Pedido feito e ainda em análise (até 10 dias) não é este caso:** não há modo demonstração
+nem aplicação emprestada. A pessoa para ali e retoma quando a aplicação aparecer (`devcenter.md`,
+passo 5 do formulário). Decisão do Marvin em 24/11/2026.
 
 ### 8. Deixar o pacote se atualizar sozinho
 
