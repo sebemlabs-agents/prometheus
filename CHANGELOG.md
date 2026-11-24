@@ -29,7 +29,7 @@
 
 Desde 16/11/2026 o Mercado Livre não deixa mais quem nunca criou aplicação criá-la sozinho no
 DevCenter: o pedido é por formulário, a análise leva até 10 dias e, aprovada, a aplicação já
-vem criada. A skill `prometheus-conectar-meli` foi ajustada a isso, só em texto:
+vem criada. A skill `prometheus-conectar-meli` foi ajustada a isso:
 
 - Quem **nunca criou** é levado ao formulário (passo a passo, campo a campo), pede no mesmo
   dia e deixa pasta e `credenciais.txt` prontos enquanto espera.
@@ -41,7 +41,16 @@ vem criada. A skill `prometheus-conectar-meli` foi ajustada a isso, só em texto
   permissão no DevCenter, trata como possível limite da função, não como erro dela.
 - Pedido em análise **não** leva ao modo demonstração: a pessoa para e retoma quando aprovar.
 
-Nenhum script, cabeçalho de skill ou manifesto mudou além do número da versão.
+- **Quem já tem aplicação** reaproveita a que existe, sem baixar permissão nem desligar nada
+  que o ERP use. O guia não manda mais criar uma segunda.
+- O guia diz o que o formulário não mostra: enviar não garante aprovação, e ele não atende quem
+  já criou aplicação nem aplicações MCP.
+- **App ID e chave** de um lado, configuração do outro: o botão *Continuar* aparece na ordem certa.
+- **`pasta.py`:** rodado de novo com outro nome de loja, mostra a URL que está no
+  `credenciais.txt`, e não uma nova que não estava cadastrada em lugar nenhum.
+
+Só a descrição da skill do Mercado Livre mudou entre os cabeçalhos, para reconhecer quem volta
+dizendo que o pedido foi aprovado.
 
 ## 1.8.4 — 7 de novembro de 2026
 

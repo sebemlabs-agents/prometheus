@@ -1,6 +1,6 @@
 ---
 name: prometheus-conectar-meli
-description: "Conecta a conta do Mercado Livre do usuário em somente leitura, na pasta dele, e deixa o pacote Elo pronto para usar. Conduz a criação do aplicativo no DevCenter, a autorização OAuth sem expor segredo no chat, a confirmação da conta e o primeiro painel. Use sempre que o usuário pedir para conectar, reconectar, instalar ou configurar o Mercado Livre, o pacote Elo ou qualquer skill prometheus-*, ou quando outra skill do pacote falhar por falta de conexão — mesmo que ele não diga \"conectar\". Use também quando ele relatar QUALQUER erro, travamento ou dúvida sobre o pacote, em qualquer momento depois da instalação: \"deu erro\", \"não funciona\", \"parou\", \"python não encontrado\", \"invalid_grant\", \"a pasta foi recusada\", \"o painel não abre\", \"perdi o acesso\". Use também quando ele perguntar se está atualizado, por que uma correção não chegou, ou como ligar a atualização automática do pacote. A tabela de sintomas reais está em references/problemas.md."
+description: "Conecta a conta do Mercado Livre do usuário em somente leitura, na pasta dele, e deixa o pacote Elo pronto para usar. Conduz o pedido do aplicativo no DevCenter, a autorização OAuth sem expor segredo no chat, a confirmação da conta e o primeiro painel. Use sempre que o usuário pedir para conectar, reconectar, instalar ou configurar o Mercado Livre, o pacote Elo ou qualquer skill prometheus-*, ou quando outra skill do pacote falhar por falta de conexão — mesmo que ele não diga \"conectar\". Use também quando ele relatar QUALQUER erro, travamento ou dúvida sobre o pacote, em qualquer momento depois da instalação: \"deu erro\", \"não funciona\", \"parou\", \"python não encontrado\", \"invalid_grant\", \"a pasta foi recusada\", \"o painel não abre\", \"perdi o acesso\", \"o ML aprovou o app\". Use também quando ele perguntar se está atualizado, por que uma correção não chegou, ou como ligar a atualização automática do pacote. A tabela de sintomas reais está em references/problemas.md."
 ---
 
 # Conectar o Mercado Livre — pacote Elo
@@ -12,7 +12,7 @@ description: "Conecta a conta do Mercado Livre do usuário em somente leitura, n
 
 
 Esta skill tem uma missão só: levar o usuário de "nunca conectei nada" até **os números da
-própria loja na tela**, em cerca de 10 minutos, pelo mesmo caminho que todas as outras
+própria loja na tela**, em cerca de 10 minutos depois de ter a aplicação, pelo mesmo caminho que todas as outras
 pessoas seguem.
 
 O caminho é fixo de propósito. Na edição anterior deste material, cada pessoa escolhia a URL
@@ -259,27 +259,34 @@ marcada. Ela constrói tudo igual e conecta depois.
 
 ### 3. O aplicativo no DevCenter
 
-Pergunte se o usuário já tem aplicação no DevCenter do Mercado Livre.
+**Pergunte primeiro se ele já mandou o pedido pelo formulário do Mercado Livre.** Só depois
+pergunte se já tem aplicação no DevCenter.
 
-- **Não tem, ou não sabe:** confira primeiro na lista do DevCenter (vazia = nunca criou).
+- **Já mandou o pedido:** não recomece e não mande outro. Vá direto ao passo 5 do formulário em
+  `references/devcenter.md`. Antes de seguir, confirme que a aplicação da lista **nasceu
+  desse pedido** (não existia antes e traz a URL do `credenciais.txt`) e que nenhum sistema usa
+  ela: aí siga em "No DevCenter (depois da aprovação)". Em dúvida, ou se um ERP usa, vá para
+  "Reaproveitar".
+- **Não tem, ou não sabe:** olhe a lista do DevCenter e pergunte se ele já criou alguma antes
+  (lista vazia não prova que nunca criou). Se já criou e apagou, o formulário não atende: etapa 7.
   Se nunca criou, **desde 16/11/2026 ele não cria sozinho**: siga `references/devcenter.md`, parte
-  "Quem nunca criou aplicação", que é o **formulário** do Mercado Livre — eles analisam e criam em
-  até 10 dias. Faça o pedido **no mesmo dia** e deixe pasta e `credenciais.txt` prontos enquanto
+  "Quem nunca criou aplicação", que é o **formulário** do Mercado Livre — eles analisam em
+  até 10 dias e, **se aprovarem**, criam. Enviar não garante aprovação. Faça o pedido **no mesmo dia** e deixe pasta e `credenciais.txt` prontos enquanto
   espera. Ele faz os cliques, você explica. Na função do formulário, **Manage sales** é o foco
-  da imersão (detalhe e o que dizer sobre outras no `devcenter.md`). **Quando ele voltar depois
-  da espera, não recomece:** confira se a aplicação apareceu e siga daí (`devcenter.md`, passo 5
-  do formulário).
+  da imersão (detalhe e o que dizer sobre outras no `devcenter.md`).
 - **Já tem** (porque integra ERP, por exemplo): vá na seção "Reaproveitar uma aplicação que já
   existe" do mesmo arquivo. A regra é **adicionar** a URL de retorno e as permissões, nunca
   substituir — trocar a URL de um aplicativo em produção derruba a integração do ERP dele.
 
 Os três pontos que mais dão erro: a URL de redirecionamento idêntica à do `credenciais.txt`
 (**ela copia do arquivo, nunca digita**), os interruptores de authorization code, refresh
-token, PKCE e credenciais de API, e as quatro permissões funcionais.
+token e PKCE (**não** o client credentials), e as quatro permissões. **Em aplicação
+reaproveitada valem só as regras da seção "Reaproveitar"** do `devcenter.md`.
 
-**Avise antes do que vem ao abrir a aplicação aprovada:** ela vai precisar clicar em editar, logar de novo, e passar por uma tela de erro de
-callback clicando em continuar lá embaixo — só então aparecem App ID e chave secreta. Quem não
-é avisado acha que quebrou.
+**Avise antes do que vem ao abrir a aplicação aprovada:** ela vai precisar clicar em
+editar, logar de novo e talvez passar por um erro de callback. App ID e chave secreta ficam numa
+parte, e o resto da configuração depois do botão **Continuar**, no fim da página. Quem não é
+avisado acha que quebrou.
 
 ### 4. Preencher as credenciais (o usuário faz, fora do chat)
 
@@ -347,13 +354,13 @@ Se o usuário não conseguir ter a aplicação — pedido recusado, limite da co
 validação, conta de operador, domínio bloqueado pelo administrador, ou aplicativo de produção
 que ele não quer mexer — **não insista e não trave a conversa**. Ele segue no modo
 demonstração: as skills rodam com dados preparados, o painel marca isso de forma visível e
-permanente, e ele constrói tudo igual. Depois cria a aplicação com calma.
+permanente, e ele constrói tudo igual. Depois resolve a aplicação com calma.
 
 Nunca apresente dado de demonstração como se fosse da conta dele.
 
 **Pedido feito e ainda em análise (até 10 dias) não é este caso:** não há modo demonstração
 nem aplicação emprestada. A pessoa para ali e retoma quando a aplicação aparecer (`devcenter.md`,
-passo 5 do formulário). Decisão do Marvin em 24/11/2026.
+passo 5 do formulário).
 
 ### 8. Deixar o pacote se atualizar sozinho
 

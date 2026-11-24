@@ -17,7 +17,7 @@ tente adivinhar — errar o diagnóstico custa mais que admitir.
 | Quer saber se a renovação funciona, sem esperar 6 horas | presença de refresh não é prova | `python3 meli.py renovar` — responde `renovacao funcionou` ou diz o que o ML recusou |
 | `Outra execucao esta renovando a credencial nesta pasta` | duas coisas rodando ao mesmo tempo na mesma pasta (rotina agendada + uso manual, ou duas janelas) | **não é erro de conexão.** Espere a outra terminar e rode de novo. A trava existe justamente para a renovação não acontecer duas vezes |
 | `Nao consigo gravar na pasta da conexao` | a pasta não aceita gravação (permissão, caminho, disco) | o pacote **não renovou de propósito**: renovar sem poder guardar o resultado derrubaria o acesso. Conserte a permissão da pasta e rode de novo |
-| `403 PA_UNAUTHORIZED_RESULT_FROM_POLICIES` | falta permissão funcional | marque as quatro no DevCenter e autorize de novo |
+| `403 PA_UNAUTHORIZED_RESULT_FROM_POLICIES` | falta permissão funcional | no DevCenter, dê *Leitura* só às que estão em *Sem acesso*, sem baixar nenhuma, e autorize de novo. Recurso que não aparece: veja `devcenter.md`, Permissões |
 | `401` depois de semanas | acesso expirado | refaça a etapa 5 |
 | `429` | muitas chamadas seguidas | espere alguns segundos. Numa sala com muita gente na mesma rede isso é esperado: siga o combinado de todo mundo na mesma tela, comando só no ok |
 | A conexão cai algumas horas depois de funcionar | duas cópias usando a mesma credencial | o refresh token é de uso único. Não copie `tokens.json` para outra máquina nem rode a mesma credencial em dois lugares |

@@ -6,10 +6,11 @@ aplicação e precisa reaproveitá-la.
 > **Mudou em 16/11/2026 — quem nunca criou aplicação não cria mais sozinho.** O botão
 > *Criar nova aplicação* sumiu do DevCenter para essa pessoa. O caminho oficial é um
 > **formulário**: ela manda o pedido, o Mercado Livre analisa e, se aprovar, **cria a aplicação
-> na conta dela** — em **até 10 dias** (prazo do guia oficial, 23/11/2026). Por isso este
+> na conta dela** — em **até 10 dias** (prazo do guia oficial, 23/11/2026). **Enviar não garante aprovação**. Por isso este
 > arquivo agora tem duas partes: **pedir** (hoje) e **configurar** (depois da aprovação).
-> Quem já tem aplicação não passa pelo formulário. **Ele faz os cliques, você explica.** Nunca peça para ele
-colar App ID ou Client Secret no chat: esses valores vão direto no `credenciais.txt`, que ele
+> Quem já tem aplicação não passa pelo formulário.
+
+**Ele faz os cliques, você explica.** Nunca peça para ele colar App ID ou Client Secret no chat: esses valores vão direto no `credenciais.txt`, que ele
 mesmo preenche.
 
 Fonte: documentação oficial do Mercado Livre — "Autenticação e Autorização" e "Permissões
@@ -25,7 +26,8 @@ funcionais" (developers.mercadolivre.com.br).
   `invalid_operator_user_id`. Se o usuário não sabe qual tem, pergunte quem acessa o
   financeiro da loja — normalmente é a administradora.
 - Se os dados do titular estiverem **pendentes de validação** no Mercado Livre, o pedido pode
-  não ser aprovado. Nesse caso vá para o modo demonstração e ele resolve depois.
+  não ser aprovado. Peça para regularizar antes de pedir. Se não der, vá para o modo demonstração
+  e ele resolve depois. Pedido **já enviado e em análise** só espera: não é demonstração.
 - **Quem nunca criou aplicação: peça hoje.** A análise leva até 10 dias e nada do DevCenter
   em diante funciona antes dela. O resto (pasta, `credenciais.txt`, URL de retorno) dá para
   deixar pronto enquanto espera.
@@ -59,7 +61,13 @@ página dando erro é o comportamento correto.
 
 ### Quem nunca criou aplicação: peça pelo formulário
 
-Só para quem **nunca criou** nenhuma: o formulário recusa quem já tem. Ele é do Google
+Só para quem **nunca criou** nenhuma, **nem no passado**: lista vazia hoje não prova isso, então
+pergunte. **O formulário não avisa na tela** que a conta não se encaixa: ele aceita o envio, e a
+conferência só acontece depois. Ele também **não atende aplicações MCP**; este pacote não é uma,
+lê direto a API do Mercado Livre. Se o projeto da pessoa for um servidor MCP, este caminho não
+serve: diga isso antes de ela preencher, e não prometa alternativa.
+
+Ele é do Google
 Forms, está **em inglês** e o endereço é `https://forms.gle/2Q39SStHLJNQLjuK9` (título
 *Application Creation Request — Mercado Libre*). Não é pelo DevCenter.
 
@@ -72,11 +80,11 @@ Forms, está **em inglês** e o endereço é `https://forms.gle/2Q39SStHLJNQLjuK
      aplicação só vai ler a conta dela). *Business or third-party use* é para quem deixa
      outras pessoas conectarem contas: não é o caso.
    - **What is the intended use of the application?** (a segunda — o título se repete, mas
-     agora são as **funções**) — **Manage sales**, a mais versátil (pedidos são a base do
+     agora são as **funções**) — **Manage sales**, a indicada na imersão (pedidos são a base do
      pacote). Diga à pessoa, de forma leve e direta:
      - **Processo novo** (16/11/2026): **ainda não sabemos** se a função escolhida limita os
-       escopos depois da aprovação. Por ora, uma mais usável como *Manage sales* permite mais
-       coisa.
+       escopos depois da aprovação. Indicamos *Manage sales* por ser a aposta mais versátil, **não
+       porque alguém confirmou** que ela libera mais.
      - **Na imersão o foco é *Manage sales*:** é nela que damos suporte, em uma linha só.
      - **Quem tem um projeto em mente** (automação de promoções, repasses, criar anúncios…)
        pode escolher outra: *Manage or optimize prices*, *Financial and Fiscal*, *Manage
@@ -92,13 +100,16 @@ Forms, está **em inglês** e o endereço é `https://forms.gle/2Q39SStHLJNQLjuK
 3. **Enviar.** O rodapé do formulário diz o que acontece: o Mercado Livre confere a conta e,
    se aprovar, **a aplicação é criada e aparece no DevCenter** do país da conta (para o Brasil,
    `developers.mercadolivre.com.br/devcenter`, logado com a mesma conta do pedido).
-4. **Anote a data de hoje e pare aqui.** Não é erro: a análise leva **até 10 dias**. Se passar
-   disso, confira se o apelido estava certo e mande de novo.
+4. **Anote a data de hoje e pare aqui.** Não é erro: a análise leva **até 10 dias** e
+   **pode não ser aprovada**. Peça para ela guardar a data e a conta usada no pedido.
 5. **Quando a pessoa voltar** ("o ML aprovou", "apareceu a aplicação", ou só retomando a
    conversa): **não recomece.** Pergunte a data do pedido, peça que abra o DevCenter com a
    mesma conta e confira se a aplicação **apareceu na lista**. Apareceu: siga para "No DevCenter
    (depois da aprovação)" abaixo e depois para as credenciais (etapa 4 do `SKILL.md`). Não
-   apareceu: dentro de 10 dias, só aguardar; passou, conferir o apelido e pedir de novo.
+   apareceu: dentro de 10 dias, só aguardar; passou, conferir se a
+   conta e o apelido estavam certos. Não conhecemos canal oficial de acompanhamento: não mande
+   reenviar por conta própria nem prometa prazo novo. **Recusado:** modo demonstração (etapa 7 do
+   `SKILL.md`).
 
 Enquanto espera, **dá para deixar pronto tudo o que não depende da aprovação**: a pasta, o
 `credenciais.txt` e a URL de retorno.
@@ -111,7 +122,13 @@ Enquanto espera, **dá para deixar pronto tudo o que não depende da aprovação
 
    > Se a lista estiver vazia: ou o pedido ainda não foi aprovado, ou ela entrou com outra
    > conta. Confira a conta antes de qualquer outra coisa.
-2. **Abra a aplicação** (Editar aplicação). O Mercado Livre pede o login de novo; é normal.
+2. **Abra a aplicação** (Editar aplicação). O Mercado Livre pede o login de novo; é normal. Pode
+   aparecer um **erro de callback**: também é esperado.
+
+   **A aplicação abre em duas partes.** Uma mostra o **App ID** e a **chave secreta**; URL de
+   retorno, interruptores e permissões ficam **depois do botão Continuar**, no fim da página.
+   Copie os dois valores direto para o `credenciais.txt` (**nunca para o chat**), role até o fim e
+   clique em **Continuar**. Se o que você procura não está na tela, está do outro lado desse botão.
 3. **URIs de redirect** (a tela usa o plural, e tem um botão *Adicionar URI de redirect*):
    a que ela pôs no formulário **já deve estar lá**. Compare com o `credenciais.txt` —
    idêntica, inclusive a barra final — e, se faltar, cole a do arquivo. **Nada de digitar.**
@@ -160,7 +177,10 @@ Enquanto espera, **dá para deixar pronto tudo o que não depende da aprovação
    > **Quem pediu pelo formulário:** se algum desses recursos **não aparece**, ou só aparece
    > como *Sem acesso* e não deixa mudar, pode ser a função escolhida no pedido limitando os
    > escopos (ainda não sabemos). **Não é erro da pessoa.** Anote qual recurso faltou, diga que
-   > vamos descobrir como ampliar (suporte do ML) e siga com o que está liberado.
+   > vamos descobrir como ampliar. Dá para seguir com o resto, mas **avise o que fica de fora**:
+   > sem *Publicação e sincronização* não há anúncios; sem *Vendas e envios*, não há pedidos; sem
+   > *Promoções, cupons e descontos*, não há promoções. Essas skills vão dar `403`. Sem *Usuários*,
+   > **pare**: não dá para confirmar a conta. Não diga que a conexão ficou completa.
 
 6. **Tópicos e notificações:** não precisa marcar nada. Se o formulário exigir uma URL,
    use a mesma `.invalid`.
@@ -168,29 +188,19 @@ Enquanto espera, **dá para deixar pronto tudo o que não depende da aprovação
 7. **Salvar.** **Às vezes dá erro na primeira tentativa.** Clicar de novo costuma
    resolver — avise antes, senão ela acha que preencheu algo errado e começa a desfazer.
 
-### Abrir a aplicação — a parte que surpreende todo mundo
+### Depois de salvar — a parte que surpreende todo mundo
 
-A pessoa **não** cai numa tela com App ID e chave secreta à mão. O caminho real é este, e
-avisar antes evita a sensação de que algo deu errado:
-
-1. Ao **salvar** as configurações, ela é **redirecionada para uma página do Mercado Livre**, não para o DevCenter.
-2. Para ver os valores, precisa **abrir a aplicação na lista e clicar em editar**.
-3. Nesse momento o Mercado Livre costuma **pedir o login de novo**. É normal; é a conta dela
-   mesma.
-4. A primeira tela pode mostrar **um erro de callback**. Também é esperado — é a `.invalid`
-   fazendo o trabalho dela. **Role até o fim da página e clique em continuar** para chegar nos
-   campos.
-5. Ali estão o **App ID (client id)** e a **chave secreta (client secret)**.
-
-Sempre que ela precisar ver os valores de novo, é esse mesmo caminho: lista → editar →
-login → continuar.
+Ao **salvar**, ela costuma ser **redirecionada para uma página do Mercado Livre**, não para o
+DevCenter. Não é erro. Se ainda não copiou o **App ID** e a **chave secreta**, ou precisar vê-los
+de novo, é o mesmo caminho: lista → editar → login → os dois valores (se um erro de callback estiver
+na frente, role até o fim e siga por ele).
 
 **Na lista, a aplicação aparece como "Aplicativo não certificada", com uma nota de segurança e
 um convite a "terminar de configurar a segurança".** Não é erro e não precisa ser resolvido: é
 o DevCenter pedindo certificação, que serve a quem publica aplicativo para terceiros. Diga isso
 antes que ela leia sozinha e ache que parou no meio.
 
-6. Ela copia os dois valores para o `credenciais.txt`. **Não para o chat.**
+Confirme que os dois valores estão no `credenciais.txt`. **Não no chat.**
 
 ---
 
@@ -203,18 +213,28 @@ Caso comum: o usuário já integra Bling, Olist, Tiny ou outro sistema, e já te
 1. Abra a aplicação existente no DevCenter.
 2. Na URL de redirecionamento, **acrescente** a URL que o `pasta.py` gerou para ela à lista,
    mantendo a que já está lá.
-3. Nas permissões funcionais, **marque as que faltam** das quatro acima, sem desmarcar nada.
-4. Pegue o App ID e o Client Secret dessa aplicação.
+3. Nas permissões, **mexa só nas que estão em *Sem acesso*** entre as quatro acima, e ponha
+   *Leitura*. **O que já está em *Leitura e escrita* fica como está:** baixar para *Leitura* quebra
+   o sistema que usa essa aplicação.
+   Nos interruptores, ligue *Authorization Code* e *Refresh Token* se faltarem e **não desligue
+   nenhum** — o "NÃO marcar" da lista acima vale só para aplicação nova. Se *pkce* estiver
+   desligado, **não ligue sem confirmar** com quem cuida do sistema: ligado, ele passa a ser
+   exigido de todos, e o ERP pode parar de autorizar.
+4. **Salve** e confira, reabrindo, que a URL antiga e os acessos antigos continuam lá.
+5. Ela copia o App ID e o Client Secret para o `credenciais.txt`. **Não para o chat.**
+
+A URL e as permissões ficam depois do botão **Continuar**, como na aplicação aprovada.
+
+**Diga antes de autorizar:** se a aplicação tem *Leitura e escrita*, o acesso gerado pode carregar
+escrita também. **O pacote só faz leitura** (o `meli.py` recusa o resto), mas isso é trava do
+pacote, não do Mercado Livre. Se ela não quiser, modo demonstração.
 
 **Se a tela não permitir mais de uma URL de redirecionamento, pare.** Trocar a URL de uma
 aplicação que sustenta o ERP dele derruba a integração em produção, no meio de uma conversa.
 
-Nesse caso a saída é simples: **crie uma aplicação nova.** Não há limite de uma por titular, e
-uma aplicação nova não encosta na que já existe.
-
 Sobre **criar uma aplicação nova para quem já tem outra**: em 20/10/2026 isso funcionava (três
-aplicações na mesma conta). **Desde 16/11/2026 não vale mais:** o formulário recusa quem já tem
-aplicação, e o DevCenter manda falar com o time OpenPlatform do Mercado Livre, que não tem canal
+aplicações na mesma conta). **Desde 16/11/2026 não vale mais:** o formulário não atende quem já
+criou aplicação, e o DevCenter manda falar com o time OpenPlatform do Mercado Livre, que não tem canal
 público. Portanto **não prometa** uma aplicação nova a quem já tem — o caminho é o
 reaproveitamento acima, e, se a tela não aceitar mais de uma URL, o modo demonstração.
 
@@ -250,9 +270,9 @@ depois, parecendo falha de rede.
 
 | O que aparece | O que é | O que fazer |
 |---|---|---|
-| O formulário diz que a conta já tem aplicação | o pedido é só para quem nunca criou | use a que já existe (seção "Reaproveitar") |
+| Pediu pelo formulário, mas já tinha criado aplicação antes | o pedido é só para quem nunca criou, e a tela não avisa | use a que já existe (seção "Reaproveitar"); se não sobrou nenhuma, modo demonstração |
 | "your client callback has to match with the redirect_uri param" | a URL do `credenciais.txt` não é idêntica à cadastrada | compare caractere por caractere, inclusive barra final |
 | `invalid_operator_user_id` | autorizou com conta de operador | repita com a conta administradora |
-| `403 PA_UNAUTHORIZED_RESULT_FROM_POLICIES` | falta permissão funcional | marque as quatro, salve e autorize de novo |
+| `403 PA_UNAUTHORIZED_RESULT_FROM_POLICIES` | falta permissão funcional | confira as quatro, dê *Leitura* só às que estão em *Sem acesso*, sem baixar nenhuma, salve e autorize de novo. Se o recurso não aparece ou não deixa mudar, veja o aviso das Permissões |
 | "Sorry, the application cannot connect to your account" | URL divergente, conta de colaborador, ou dados do titular pendentes de validação | confira os três, nessa ordem |
 | Client Secret renovado no DevCenter | o valor antigo parou de valer | atualize o `credenciais.txt` e autorize de novo |

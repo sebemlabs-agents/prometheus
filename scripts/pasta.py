@@ -222,6 +222,25 @@ def completar_credenciais(arquivo):
     return novos
 
 
+def uri_do_arquivo(arquivo):
+    """A URL de retorno que ja esta no credenciais.txt, ou "" se nao houver.
+
+    Le so essa linha; as outras tem segredo e nao saem daqui."""
+    try:
+        bruto = arquivo.read_bytes()
+    except OSError:
+        return ""
+    for linha in bruto.splitlines():
+        if linha.startswith(b"MELI_REDIRECT_URI="):
+            uri = linha[len(b"MELI_REDIRECT_URI="):].decode("utf-8", "replace").strip()
+            # Isto vai para a tela. URL com codigo ou senha colada aqui por
+            # engano nao pode sair; so um endereco simples sai.
+            if uri.lower().startswith("https://") and not any(c in uri for c in "?#@"):
+                return uri
+            return ""
+    return ""
+
+
 def preparar(caminho=None, nome=None):
     """Confere a pasta e deixa os arquivos de apoio no lugar.
 
@@ -241,6 +260,9 @@ def preparar(caminho=None, nome=None):
         criados.append(cred.name)
     else:
         acrescentados = completar_credenciais(cred)
+        # Vale a URL do arquivo, nao a do nome digitado agora: e a do arquivo
+        # que foi cadastrada no Mercado Livre.
+        uri = uri_do_arquivo(cred)
 
     gi = pasta / ".gitignore"
     if not gi.exists():
@@ -373,7 +395,7 @@ def _main():
         print("ATENCAO: nao foi possivel confirmar a restricao de leitura da")
         print("propria pasta. Arquivo fechado dentro de pasta aberta nao protege.")
     print("\nURL de retorno desta pasta (copie do arquivo, nao digite):")
-    print("  %s" % r["uri"])
+    print("  %s" % (r["uri"] or "(confira a linha MELI_REDIRECT_URI no credenciais.txt)"))
     print("\nProximo passo: cadastre essa URL na aplicacao do DevCenter, depois abra")
     print("credenciais.txt, preencha App ID e Client Secret, salve, e rode:")
     print("  python3 meli.py check")
