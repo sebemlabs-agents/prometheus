@@ -104,7 +104,9 @@ Forms, está **em inglês** e o endereço é `https://forms.gle/2Q39SStHLJNQLjuK
    **pode não ser aprovada**. Peça para ela guardar a data e a conta usada no pedido.
 5. **Quando a pessoa voltar** ("o ML aprovou", "apareceu a aplicação", ou só retomando a
    conversa): **não recomece.** Pergunte a data do pedido, peça que abra o DevCenter com a
-   mesma conta e confira se a aplicação **apareceu na lista**. Apareceu: siga para "No DevCenter
+   mesma conta e confira se a aplicação **apareceu na lista**. Apareceu: confirme que
+   ela **nasceu desse pedido** (não existia antes e traz a URL do `credenciais.txt`) e que nenhum
+   sistema a usa. Em dúvida, ou se um ERP usa, vá para "Reaproveitar". Confirmado: siga para "No DevCenter
    (depois da aprovação)" abaixo e depois para as credenciais (etapa 4 do `SKILL.md`). Não
    apareceu: dentro de 10 dias, só aguardar; passou, conferir se a
    conta e o apelido estavam certos. Não conhecemos canal oficial de acompanhamento: não mande

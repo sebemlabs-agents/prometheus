@@ -13,6 +13,7 @@ CLI:
 Compatibilidade: Python 3.8+.
 """
 import os
+import re
 import sys
 from urllib.parse import urlparse
 from pathlib import Path
@@ -140,7 +141,6 @@ def apelido(nome):
     Quem digita duas vezes erra uma. Por isso ninguem digita a URL: ela e
     gerada aqui e a pessoa copia do arquivo para o DevCenter.
     """
-    import re
     import unicodedata
 
     cru = unicodedata.normalize("NFKD", str(nome or ""))
@@ -223,7 +223,7 @@ def completar_credenciais(arquivo):
 
 
 def uri_do_arquivo(arquivo):
-    """A URL de retorno que ja esta no credenciais.txt, ou "" se nao houver.
+    """A URL .invalid que ja esta no credenciais.txt, ou "" se nao for uma dessas.
 
     Le so essa linha; as outras tem segredo e nao saem daqui."""
     try:
@@ -233,9 +233,9 @@ def uri_do_arquivo(arquivo):
     for linha in bruto.splitlines():
         if linha.startswith(b"MELI_REDIRECT_URI="):
             uri = linha[len(b"MELI_REDIRECT_URI="):].decode("utf-8", "replace").strip()
-            # Isto vai para a tela. URL com codigo ou senha colada aqui por
-            # engano nao pode sair; so um endereco simples sai.
-            if uri.lower().startswith("https://") and not any(c in uri for c in "?#@"):
+            # Isto vai para a tela. Se colaram segredo aqui por engano, ele nao
+            # pode sair: so sai o formato que este pacote gera.
+            if re.fullmatch(r"https://[a-z0-9-]{1,40}\.invalid/callback", uri):
                 return uri
             return ""
     return ""

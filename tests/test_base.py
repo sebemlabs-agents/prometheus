@@ -2540,7 +2540,9 @@ def test_preparar_nao_devolve_url_com_codigo_colada_no_lugar_da_uri(tmp_path):
     # A saida vai para o chat. Se colaram ali a URL de autorizacao, o codigo
     # nao pode aparecer.
     for ruim in ("https://x.invalid/callback?code=TG-segredo", "TG-segredo",
-                 "https://u:senha@x.invalid/", "https://x.invalid/#code=TG"):
+                 "https://u:senha@x.invalid/", "https://x.invalid/#code=TG",
+                 "https://exemplo.invalid/CLIENT_SECRET", "https://x.com/\x1b[31m",
+                 "https://x.invalid/callback/TG"):
         (tmp_path / "credenciais.txt").write_text(
             "MELI_REDIRECT_URI=%s\n" % ruim, encoding="utf-8")
         assert pasta_mod.preparar(tmp_path, nome="Loja Teste")["uri"] == ""
