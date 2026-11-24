@@ -25,8 +25,9 @@ copia. **Não invente endereço, não sugira variação, não improvise ordem de
 Antes do primeiro comando, diga três coisas — curto, sem lista técnica. É o que faz ele
 seguir sem medo, e é a única parte que não dá para recuperar depois:
 
-1. **O que vai acontecer:** criar um aplicativo no site de desenvolvedores do Mercado Livre,
-   autorizar, e ver os números dele na tela. Cerca de 10 minutos.
+1. **O que vai acontecer:** ter um aplicativo no site de desenvolvedores do Mercado Livre
+   (quem nunca criou pede por formulário e espera a aprovação), autorizar, e ver os números dele
+   na tela. Cerca de 10 minutos **depois** da aprovação.
 2. **O que isto nunca faz:** não altera preço, estoque, anúncio nem pedido; não adere a
    promoção; não responde cliente. Só lê.
 3. **A promessa que ele pode cobrar:** *"eu nunca vou te pedir senha, código ou chave aqui no
@@ -260,8 +261,11 @@ marcada. Ela constrói tudo igual e conecta depois.
 
 Pergunte se o usuário já tem aplicação no DevCenter do Mercado Livre.
 
-- **Não tem, ou não sabe:** siga `references/devcenter.md` com ele. Ele faz os cliques, você
-  explica.
+- **Não tem, ou não sabe:** confira primeiro na lista do DevCenter (vazia = nunca criou).
+  Se nunca criou, **desde 16/11/2026 ele não cria sozinho**: siga `references/devcenter.md`, parte
+  "Quem nunca criou aplicação", que é o **formulário** do Mercado Livre — eles analisam e criam em
+  até 10 dias. Faça o pedido **no mesmo dia** e deixe pasta e `credenciais.txt` prontos enquanto
+  espera. Ele faz os cliques, você explica.
 - **Já tem** (porque integra ERP, por exemplo): vá na seção "Reaproveitar uma aplicação que já
   existe" do mesmo arquivo. A regra é **adicionar** a URL de retorno e as permissões, nunca
   substituir — trocar a URL de um aplicativo em produção derruba a integração do ERP dele.
@@ -270,8 +274,7 @@ Os três pontos que mais dão erro: a URL de redirecionamento idêntica à do `c
 (**ela copia do arquivo, nunca digita**), os interruptores de authorization code, refresh
 token, PKCE e credenciais de API, e as quatro permissões funcionais.
 
-**Avise antes do que vem depois de salvar:** ela vai cair numa página do Mercado Livre, vai
-precisar abrir a aplicação e clicar em editar, logar de novo, e passar por uma tela de erro de
+**Avise antes do que vem ao abrir a aplicação aprovada:** ela vai precisar clicar em editar, logar de novo, e passar por uma tela de erro de
 callback clicando em continuar lá embaixo — só então aparecem App ID e chave secreta. Quem não
 é avisado acha que quebrou.
 
@@ -337,7 +340,7 @@ um bloco no painel. **Skill ausente não é erro.**
 
 ### 7. Quando não dá para conectar
 
-Se o usuário não conseguir criar a aplicação — limite da conta, dados do titular pendentes de
+Se o usuário não conseguir ter a aplicação — pedido ainda em análise (até 10 dias), pedido recusado, limite da conta, dados do titular pendentes de
 validação, conta de operador, domínio bloqueado pelo administrador, ou aplicativo de produção
 que ele não quer mexer — **não insista e não trave a conversa**. Ele segue no modo
 demonstração: as skills rodam com dados preparados, o painel marca isso de forma visível e
