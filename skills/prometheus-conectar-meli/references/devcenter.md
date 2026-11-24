@@ -73,10 +73,16 @@ Forms, está **em inglês** e o endereço é `https://forms.gle/2Q39SStHLJNQLjuK
      outras pessoas conectarem contas: não é o caso.
    - **What is the intended use of the application?** (a segunda — o título se repete, mas
      agora são as **funções**) — **Manage sales**, a mais versátil (pedidos são a base do
-     pacote). **Todo mundo marca a mesma.** Processo novo (16/11/2026): **não se sabe** se a
-     função escolhida limita os escopos depois da aprovação. Diga isso à pessoa; se, aprovada,
-     faltar permissão no DevCenter, é a hora de descobrir como ampliar (suporte do ML).
-     *Manage product listings* é a mais estreita: evite.
+     pacote). Diga à pessoa, de forma leve e direta:
+     - **Processo novo** (16/11/2026): **ainda não sabemos** se a função escolhida limita os
+       escopos depois da aprovação. Por ora, uma mais usável como *Manage sales* permite mais
+       coisa.
+     - **Na imersão o foco é *Manage sales*:** é nela que damos suporte, em uma linha só.
+     - **Quem tem um projeto em mente** (automação de promoções, repasses, criar anúncios…)
+       pode escolher outra: *Manage or optimize prices*, *Financial and Fiscal*, *Manage
+       product listings*. Escolher outra vertente pode limitar o suporte que conseguimos dar,
+       e **seguir com ela é responsabilidade da pessoa**. Não trave nem insista.
+     - Depois da aprovação, a gente confere o que ficou liberado (parte abaixo).
    - **Describe what the application will do.** — aceita português. Sugira: `Painel de
      leitura dos meus próprios dados de vendedor — pedidos, anúncios e promoções da minha
      conta. Não publica e não altera anúncio nem preço.`
@@ -88,6 +94,11 @@ Forms, está **em inglês** e o endereço é `https://forms.gle/2Q39SStHLJNQLjuK
    `developers.mercadolivre.com.br/devcenter`, logado com a mesma conta do pedido).
 4. **Anote a data de hoje e pare aqui.** Não é erro: a análise leva **até 10 dias**. Se passar
    disso, confira se o apelido estava certo e mande de novo.
+5. **Quando a pessoa voltar** ("o ML aprovou", "apareceu a aplicação", ou só retomando a
+   conversa): **não recomece.** Pergunte a data do pedido, peça que abra o DevCenter com a
+   mesma conta e confira se a aplicação **apareceu na lista**. Apareceu: siga para "No DevCenter
+   (depois da aprovação)" abaixo e depois para as credenciais (etapa 4 do `SKILL.md`). Não
+   apareceu: dentro de 10 dias, só aguardar; passou, conferir o apelido e pedir de novo.
 
 Enquanto espera, **dá para deixar pronto tudo o que não depende da aprovação**: a pasta, o
 `credenciais.txt` e a URL de retorno.
@@ -145,6 +156,11 @@ Enquanto espera, **dá para deixar pronto tudo o que não depende da aprovação
 
    Faltar uma produz `HTTP 403 PA_UNAUTHORIZED_RESULT_FROM_POLICIES`, que **não diz qual
    faltou**. Por isso as quatro vão marcadas desde o começo.
+
+   > **Quem pediu pelo formulário:** se algum desses recursos **não aparece**, ou só aparece
+   > como *Sem acesso* e não deixa mudar, pode ser a função escolhida no pedido limitando os
+   > escopos (ainda não sabemos). **Não é erro da pessoa.** Anote qual recurso faltou, diga que
+   > vamos descobrir como ampliar (suporte do ML) e siga com o que está liberado.
 
 6. **Tópicos e notificações:** não precisa marcar nada. Se o formulário exigir uma URL,
    use a mesma `.invalid`.

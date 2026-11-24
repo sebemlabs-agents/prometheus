@@ -265,7 +265,10 @@ Pergunte se o usuário já tem aplicação no DevCenter do Mercado Livre.
   Se nunca criou, **desde 16/11/2026 ele não cria sozinho**: siga `references/devcenter.md`, parte
   "Quem nunca criou aplicação", que é o **formulário** do Mercado Livre — eles analisam e criam em
   até 10 dias. Faça o pedido **no mesmo dia** e deixe pasta e `credenciais.txt` prontos enquanto
-  espera. Ele faz os cliques, você explica.
+  espera. Ele faz os cliques, você explica. Na função do formulário, **Manage sales** é o foco
+  da imersão (detalhe e o que dizer sobre outras no `devcenter.md`). **Quando ele voltar depois
+  da espera, não recomece:** confira se a aplicação apareceu e siga daí (`devcenter.md`, passo 5
+  do formulário).
 - **Já tem** (porque integra ERP, por exemplo): vá na seção "Reaproveitar uma aplicação que já
   existe" do mesmo arquivo. A regra é **adicionar** a URL de retorno e as permissões, nunca
   substituir — trocar a URL de um aplicativo em produção derruba a integração do ERP dele.
