@@ -5,15 +5,15 @@ aplicação e precisa reaproveitá-la.
 
 > **Mudou em 16/11/2026 — quem nunca criou aplicação não cria mais sozinho.** O botão
 > *Criar nova aplicação* sumiu do DevCenter para essa pessoa. O caminho oficial é um
-> **formulário**: ela manda o pedido, o Mercado Livre analisa e, se aprovar, **cria a aplicação
-> na conta dela** — em **até 10 dias** (prazo do guia oficial, 23/11/2026). **Enviar não garante aprovação**. Por isso este
+> **formulário**: ela manda o pedido, o Mercado Livre analisa em **até 10 dias** e, se aprovar,
+> **cria a aplicação ou libera a criação** (as fontes dele divergem, ver passo 5). **Enviar não garante aprovação**. Por isso este
 > arquivo agora tem duas partes: **pedir** (hoje) e **configurar** (depois da aprovação).
 > Quem já tem aplicação não passa pelo formulário.
 
 **Ele faz os cliques, você explica.** Nunca peça para ele colar App ID ou Client Secret no chat: esses valores vão direto no `credenciais.txt`, que ele
 mesmo preenche.
 
-Fonte: documentação oficial do Mercado Livre — "Autenticação e Autorização" e "Permissões
+Fonte: documentação oficial do Mercado Livre — "Crie uma aplicação", "Autenticação e Autorização" e "Permissões
 funcionais" (developers.mercadolivre.com.br).
 
 ---
@@ -68,14 +68,25 @@ conferência só acontece depois. Ele também **não atende aplicações MCP**; 
 lê direto a API do Mercado Livre. Se o projeto da pessoa for um servidor MCP, este caminho não
 serve: diga isso antes de ela preencher, e não prometa alternativa.
 
-Ele é do Google
-Forms, está **em inglês** e o endereço é `https://forms.gle/2Q39SStHLJNQLjuK9` (título
-*Application Creation Request — Mercado Libre*). Não é pelo DevCenter.
+**Mande a pessoa pela página oficial**, não por um link de formulário copiado daqui:
+
+> `https://developers.mercadolivre.com.br/pt_br/crie-uma-aplicacao-no-mercado-livre`
+> → clicar na palavra **formulário**
+
+Se o Mercado Livre trocar o formulário, é essa página que muda. **O que ela diz hoje vale mais
+que este guia**; se você puder abri-la, leia antes de orientar.
+
+**Só se a página não abrir**, use o endereço que ela trazia em 24/11/2026:
+`https://forms.gle/2Q39SStHLJNQLjuK9` (Google Forms, **em inglês**, título *Application Creation
+Request — Mercado Libre*). Avise que pode ter mudado. Se o formulário pedir senha, App ID ou chave
+secreta, **pare**: o pedido não precisa de nenhum deles.
 
 1. **Pegue o apelido da conta.** Em *Meu perfil → Dados da conta* do Mercado Livre, o campo
    **Apelido** (*username*) — não o e-mail e não o nome da loja. Tem de ser da **conta dona
    da operação**: a aplicação nasce nela.
-2. **Preencha**, na ordem em que as perguntas aparecem (conferido na tela em 24/11/2026):
+2. **Preencha**, na ordem em que as perguntas aparecem (conferido na tela em 24/11/2026). **Se as
+   perguntas forem outras**, não force este roteiro: peça que ela leia ou mostre a pergunta (sem
+   dados pessoais) e responda pelo sentido, sempre *uso próprio, só leitura da própria conta*.
    - **What is the username of that account?** — o apelido, exatamente como está.
    - **What is the intended use of the application?** (a primeira) — **Personal use** (a
      aplicação só vai ler a conta dela). *Business or third-party use* é para quem deixa
@@ -98,21 +109,29 @@ Forms, está **em inglês** e o endereço é `https://forms.gle/2Q39SStHLJNQLjuK
    - **What is the application's redirect URL?** — **cole** a do `credenciais.txt`. Nada de
      digitar.
    - **Share a demo link…** — opcional. Deixe vazio.
-3. **Enviar.** O rodapé do formulário diz o que acontece: o Mercado Livre confere a conta e,
-   se aprovar, **a aplicação é criada e aparece no DevCenter** do país da conta (para o Brasil,
-   `developers.mercadolivre.com.br/devcenter`, logado com a mesma conta do pedido).
+3. **Enviar.** O Mercado Livre confere a conta. O que vem depois da aprovação **tem duas versões
+   oficiais** (24/11/2026): o rodapé do formulário diz que a aplicação **é criada e aparece** no
+   DevCenter; a página oficial diz que o **acesso é liberado para a pessoa criar**. Ninguém do
+   pacote viu ainda. Diga que pode ser qualquer uma, sem prometer nenhuma.
 4. **Anote a data de hoje e pare aqui.** Não é erro: a análise leva **até 10 dias** e
    **pode não ser aprovada**. Peça para ela guardar a data e a conta usada no pedido.
 5. **Quando a pessoa voltar** ("o ML aprovou", "apareceu a aplicação", ou só retomando a
-   conversa): **não recomece.** Pergunte a data do pedido, peça que abra o DevCenter com a
-   mesma conta e confira se a aplicação **apareceu na lista**. Apareceu: confirme que
-   ela **nasceu desse pedido** (não existia antes e traz a URL do `credenciais.txt`) e que nenhum
-   sistema a usa. Em dúvida, ou se um ERP usa, vá para "Reaproveitar". Confirmado: siga para "No DevCenter
-   (depois da aprovação)" abaixo e depois para as credenciais (etapa 4 do `SKILL.md`). Não
-   apareceu: dentro de 10 dias, só aguardar; passou, conferir se a
-   conta e o apelido estavam certos. Não conhecemos canal oficial de acompanhamento: não mande
-   reenviar por conta própria nem prometa prazo novo. **Recusado:** pare e
-   oriente ("Se o pedido foi recusado", logo abaixo).
+   conversa): **não recomece.** Pergunte a data do pedido e peça que abra
+   `https://developers.mercadolivre.com.br/devcenter` com a **mesma conta**. Olhe **primeiro a
+   lista**, depois o botão:
+   - **A aplicação apareceu na lista:** confirme que ela **nasceu desse pedido** (não existia antes
+     e traz a URL do `credenciais.txt`) e que nenhum sistema a usa. Em dúvida, ou se um ERP usa, vá
+     para "Reaproveitar". Confirmado: siga para "No DevCenter (depois da aprovação)". **Não crie
+     outra**, mesmo que o botão de criar esteja lá.
+   - **Lista vazia, mas *Criar nova aplicação* abre a tela de criação:** o acesso foi liberado.
+     Siga para "Se o DevCenter liberou a criação". Vale mesmo que ela não tenha recebido aviso.
+   - **Nem uma coisa nem outra** (ou o botão só leva de volta à página do formulário): confira se
+     a conta e o apelido são os do pedido. Dentro de 10 dias, só aguardar; passou, releia com ela a
+     página oficial, para ver se o processo mudou. Não conhecemos canal oficial de acompanhamento:
+     não mande reenviar por conta própria nem prometa prazo novo.
+   - **Recusado:** pare e oriente ("Se o pedido foi recusado", logo abaixo).
+
+   Depois de configurada, siga para as credenciais (etapa 4 do `SKILL.md`).
 
 Enquanto espera, **dá para deixar pronto tudo o que não depende da aprovação**: a pasta, o
 `credenciais.txt` e a URL de retorno.
@@ -132,14 +151,25 @@ do Mercado Livre e oriente, sem adivinhar o motivo:
 4. A pasta e o `credenciais.txt` ficam guardados: quando houver aplicação, ela volta e a conexão
    continua dali.
 
+### Se o DevCenter liberou a criação
+
+Só para quem **mandou o pedido** e chegou aqui pelo passo 5. Confirme a conta e crie **uma única**
+aplicação. Os campos abaixo são os da tela de antes de 16/11/2026; se mudaram, vá pelo sentido.
+
+- **Nome:** sugira `Painel <nome da loja>`. **Nome curto:** o apelido que o `pasta.py` gerou.
+- **Descrição:** a mesma do formulário.
+- **Logo:** era obrigatória e tinha de ser **PNG** (WebP era recusado). Avise antes.
+
+Faça na própria tela de criação os itens 3 a 7 da seção seguinte (URL, interruptores, permissões,
+salvar). Depois leia "Depois de salvar", de onde saem App ID e chave secreta. Se a lista já mostrar
+a aplicação, ela foi criada, mesmo que o salvar tenha dado erro: **abra essa, não crie outra**.
+
 ### No DevCenter (depois da aprovação)
 
 1. Acesse `https://developers.mercadolivre.com.br/devcenter` e faça login **com a mesma conta
-   do pedido**. A aplicação **já vem criada** — não há o que preencher de Nome, Descrição ou
-   Logo.
+   do pedido**. Se a aplicação já veio criada, não há o que preencher de Nome, Descrição ou Logo.
 
-   > Se a lista estiver vazia: ou o pedido ainda não foi aprovado, ou ela entrou com outra
-   > conta. Confira a conta antes de qualquer outra coisa.
+   > Se a lista estiver vazia, volte ao passo 5 do formulário antes de concluir que não foi aprovado.
 2. **Abra a aplicação** (Editar aplicação). O Mercado Livre pede o login de novo; é normal. Pode
    aparecer um **erro de callback**: também é esperado.
 
@@ -148,7 +178,7 @@ do Mercado Livre e oriente, sem adivinhar o motivo:
    Copie os dois valores direto para o `credenciais.txt` (**nunca para o chat**), role até o fim e
    clique em **Continuar**. Se o que você procura não está na tela, está do outro lado desse botão.
 3. **URIs de redirect** (a tela usa o plural, e tem um botão *Adicionar URI de redirect*):
-   a que ela pôs no formulário **já deve estar lá**. Compare com o `credenciais.txt` —
+   a que ela pôs no formulário **já deve estar lá** (se foi ela quem criou, cole agora). Compare com o `credenciais.txt` —
    idêntica, inclusive a barra final — e, se faltar, cole a do arquivo. **Nada de digitar.**
 
 4. **Ligue, uma por uma** — e confira cada uma antes de salvar, porque faltar qualquer delas
