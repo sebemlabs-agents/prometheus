@@ -111,9 +111,10 @@ Peça ao assistente, nestas palavras ou parecidas:
 
 > **conecta minha conta do Mercado Livre**
 
-A skill `prometheus-conectar-meli` conduz o resto: cria o aplicativo no DevCenter do Mercado Livre,
+A skill `prometheus-conectar-meli` conduz o resto: orienta a ter o aplicativo no DevCenter do Mercado Livre,
 faz a autorização sem nenhum segredo passar pelo chat, confirma qual conta conectou e gera o
-primeiro painel. Leva cerca de **10 minutos**.
+primeiro painel. Leva cerca de **10 minutos depois de ter o aplicativo**.
+Quem nunca criou um pede por formulário e espera a análise do Mercado Livre, de **até 10 dias**.
 
 Depois disso, peça o que quiser: *"quais promoções estão acabando?"*, *"quanto o Meli me
 deve?"*, *"atualiza o painel"*.

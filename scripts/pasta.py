@@ -13,6 +13,7 @@ CLI:
 Compatibilidade: Python 3.8+.
 """
 import os
+import re
 import sys
 from urllib.parse import urlparse
 from pathlib import Path
@@ -140,7 +141,6 @@ def apelido(nome):
     Quem digita duas vezes erra uma. Por isso ninguem digita a URL: ela e
     gerada aqui e a pessoa copia do arquivo para o DevCenter.
     """
-    import re
     import unicodedata
 
     cru = unicodedata.normalize("NFKD", str(nome or ""))
@@ -222,6 +222,25 @@ def completar_credenciais(arquivo):
     return novos
 
 
+def uri_do_arquivo(arquivo):
+    """A URL .invalid que ja esta no credenciais.txt, ou "" se nao for uma dessas.
+
+    Le so essa linha; as outras tem segredo e nao saem daqui."""
+    try:
+        bruto = arquivo.read_bytes()
+    except OSError:
+        return ""
+    for linha in bruto.splitlines():
+        if linha.startswith(b"MELI_REDIRECT_URI="):
+            uri = linha[len(b"MELI_REDIRECT_URI="):].decode("utf-8", "replace").strip()
+            # Isto vai para a tela. Se colaram segredo aqui por engano, ele nao
+            # pode sair: so sai o formato que este pacote gera.
+            if re.fullmatch(r"https://[a-z0-9-]{1,40}\.invalid/callback", uri):
+                return uri
+            return ""
+    return ""
+
+
 def preparar(caminho=None, nome=None):
     """Confere a pasta e deixa os arquivos de apoio no lugar.
 
@@ -241,6 +260,9 @@ def preparar(caminho=None, nome=None):
         criados.append(cred.name)
     else:
         acrescentados = completar_credenciais(cred)
+        # Vale a URL do arquivo, nao a do nome digitado agora: e a do arquivo
+        # que foi cadastrada no Mercado Livre.
+        uri = uri_do_arquivo(cred)
 
     gi = pasta / ".gitignore"
     if not gi.exists():
@@ -373,7 +395,7 @@ def _main():
         print("ATENCAO: nao foi possivel confirmar a restricao de leitura da")
         print("propria pasta. Arquivo fechado dentro de pasta aberta nao protege.")
     print("\nURL de retorno desta pasta (copie do arquivo, nao digite):")
-    print("  %s" % r["uri"])
+    print("  %s" % (r["uri"] or "(confira a linha MELI_REDIRECT_URI no credenciais.txt)"))
     print("\nProximo passo: cadastre essa URL na aplicacao do DevCenter, depois abra")
     print("credenciais.txt, preencha App ID e Client Secret, salve, e rode:")
     print("  python3 meli.py check")

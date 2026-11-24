@@ -2521,6 +2521,33 @@ def _pasta_com_credenciais(tmp_path, uri="https://loja.invalid/callback"):
     return arq
 
 
+def test_preparar_de_novo_relata_a_uri_do_arquivo_e_nao_a_do_nome(tmp_path):
+    # Quem volta dias depois pode dizer o nome da loja de outro jeito. A URL
+    # cadastrada no Mercado Livre e a do arquivo: e ela que tem de aparecer.
+    pasta_mod.preparar(tmp_path, nome="Loja Teste")
+    antes = (tmp_path / "credenciais.txt").read_bytes()
+    r = pasta_mod.preparar(tmp_path, nome="Loja Teste Oficial")
+    assert r["uri"] == "https://loja-teste.invalid/callback"
+    assert (tmp_path / "credenciais.txt").read_bytes() == antes
+
+
+def test_preparar_sem_a_linha_da_uri_nao_inventa_uma(tmp_path):
+    (tmp_path / "credenciais.txt").write_text("MELI_APP_ID=1\n", encoding="utf-8")
+    assert pasta_mod.preparar(tmp_path, nome="Loja Teste")["uri"] == ""
+
+
+def test_preparar_nao_devolve_url_com_codigo_colada_no_lugar_da_uri(tmp_path):
+    # A saida vai para o chat. Se colaram ali a URL de autorizacao, o codigo
+    # nao pode aparecer.
+    for ruim in ("https://x.invalid/callback?code=TG-segredo", "TG-segredo",
+                 "https://u:senha@x.invalid/", "https://x.invalid/#code=TG",
+                 "https://exemplo.invalid/CLIENT_SECRET", "https://x.com/\x1b[31m",
+                 "https://x.invalid/callback/TG"):
+        (tmp_path / "credenciais.txt").write_text(
+            "MELI_REDIRECT_URI=%s\n" % ruim, encoding="utf-8")
+        assert pasta_mod.preparar(tmp_path, nome="Loja Teste")["uri"] == ""
+
+
 def test_trocar_uri_mexe_so_na_linha_da_url(tmp_path):
     arq = _pasta_com_credenciais(tmp_path)
     r = pasta_mod.trocar_uri("https://prometheus.exemplo.com.br/", caminho=tmp_path)
